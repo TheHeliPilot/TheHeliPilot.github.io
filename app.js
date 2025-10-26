@@ -34,7 +34,7 @@ let isProUser = false;
 
 // Pro API Configuration - Using Vercel for security
 const PRO_API_CONFIG = {
-    workerUrl: 'https://heliweb.vercel.app/api/generate',
+    workerUrl: 'https://quizapp2-eight.vercel.app/api/generate',
 };
 
 // ============================================
