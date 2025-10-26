@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Flashcard Generator</title>
+    <link rel="stylesheet" href="styles-new.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header with controls -->
+        <header>
+            <div class="header-content">
+                <div>
+                    <h1>AI Quiz Generator</h1>
+                    <p>Create challenging multiple choice questions to test your knowledge</p>
+                </div>
+                <div class="header-controls">
+                    <button id="darkModeToggle" class="icon-btn" title="Toggle Dark Mode">
+                        <span class="icon">🌙</span>
+                    </button>
+                    <button id="helpBtn" class="icon-btn" title="Help & Shortcuts">
+                        <span class="icon">❓</span>
+                    </button>
+                    <button id="statsBtn" class="icon-btn" title="Statistics">
+                        <span class="icon">📊</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Input Section -->
+        <div id="inputSection" class="section">
+            <div class="welcome-section">
+                <h2>Get Started</h2>
+                <p>Create challenging multiple choice questions (all marked as HARD difficulty)</p>
+            </div>
+
+            <div class="quick-actions">
+                <button id="manualAddBtn" class="btn-primary btn-large">
+                    <span class="btn-icon">✏️</span>
+                    <div class="btn-content">
+                        <strong>Create Question</strong>
+                        <small>Add multiple choice questions manually</small>
+                    </div>
+                </button>
+                <button id="importBtn" class="btn-primary btn-large">
+                    <span class="btn-icon">📥</span>
+                    <div class="btn-content">
+                        <strong>Import Questions</strong>
+                        <small>Load existing question set</small>
+                    </div>
+                </button>
+                <button id="importFileBtn" class="btn-primary btn-large">
+                    <span class="btn-icon">📄</span>
+                    <div class="btn-content">
+                        <strong>Import Study File</strong>
+                        <small>Upload .txt, .md, .doc files</small>
+                    </div>
+                </button>
+            </div>
+
+            <div class="divider">
+                <span>OR USE AI</span>
+            </div>
+
+            <div class="ai-section">
+                <button id="claudeProBtn" class="btn-primary">Use Claude Pro (Free!)</button>
+                <button id="toggleAI" class="btn-secondary">Use API Instead</button>
+
+                <!-- Claude Pro Helper -->
+                <div id="claudeProHelper" class="hidden claude-pro-section">
+                    <div class="info-box info-box-success">
+                        <strong>✓ Works with your Claude Pro subscription!</strong>
+                        <p>Follow these steps to generate flashcards using Claude.ai:</p>
+                    </div>
+
+                    <div class="step-box">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <strong>Paste your study material here:</strong>
+                            <textarea id="claudeProText" placeholder="Paste your notes, article, or study material..." rows="6"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="step-box">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <strong>Copy this prompt (will include your text):</strong>
+                            <button id="copyPromptBtn" class="btn-primary">Copy Prompt for Claude Pro</button>
+                            <p class="helper-text">This will copy a prompt with your text. Paste it into Claude.ai</p>
+                        </div>
+                    </div>
+
+                    <div class="step-box">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <strong>Paste Claude's JSON response here:</strong>
+                            <textarea id="claudeProJSON" placeholder='Paste the JSON that Claude gives you (should start with [ and end with ])' rows="6"></textarea>
+                            <button id="importJSONBtn" class="btn-primary">Import Flashcards</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="aiOptions" class="hidden ai-options-content">
+                    <div class="info-box">
+                        <strong>Need API Access?</strong>
+                        <p>Choose your preferred AI provider:</p>
+                    </div>
+
+                    <div class="api-provider-tabs">
+                        <button class="tab-btn active" data-provider="claude">Claude API</button>
+                        <button class="tab-btn" data-provider="openai">ChatGPT API (GPT-3.5)</button>
+                    </div>
+
+                    <!-- Claude API -->
+                    <div id="claudeAPISection" class="api-provider-section">
+                        <div class="info-box">
+                            <p>Get $5 free credits:</p>
+                            <ol>
+                                <li>Go to <a href="https://console.anthropic.com/" target="_blank">console.anthropic.com</a></li>
+                                <li>Create an API key</li>
+                                <li>Paste it below</li>
+                            </ol>
+                        </div>
+
+                        <div class="api-key-section">
+                            <label for="apiKey">Claude API Key:</label>
+                            <input type="password" id="apiKey" placeholder="sk-ant-...">
+                            <button id="saveKey" class="btn-secondary">Save</button>
+                        </div>
+                    </div>
+
+                    <!-- OpenAI API -->
+                    <div id="openaiAPISection" class="api-provider-section hidden">
+                        <div class="info-box">
+                            <p>Get your OpenAI API key (uses GPT-3.5-Turbo model):</p>
+                            <ol>
+                                <li>Go to <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com/api-keys</a></li>
+                                <li>Create a new secret key</li>
+                                <li>Paste it below</li>
+                            </ol>
+                            <p><small>Note: GPT-3.5-Turbo is available to all OpenAI accounts. If you have GPT-4 access and want to use it, you can modify the code.</small></p>
+                        </div>
+
+                        <div class="api-key-section">
+                            <label for="openaiKey">OpenAI API Key:</label>
+                            <input type="password" id="openaiKey" placeholder="sk-...">
+                            <button id="saveOpenAIKey" class="btn-secondary">Save</button>
+                        </div>
+                    </div>
+
+                    <textarea id="inputText" placeholder="Paste your study material here... (e.g., notes, articles, textbook content)"></textarea>
+
+                    <button id="generateBtn" class="btn-primary">Generate Flashcards with AI</button>
+                    <div id="loading" class="loading hidden">Generating flashcards...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Questions Display -->
+        <div id="cardsSection" class="section hidden">
+            <div class="cards-header">
+                <div class="cards-title">
+                    <h2>Your Questions (<span id="cardCount">0</span>)</h2>
+                    <input type="text" id="searchInput" placeholder="Search questions..." class="search-input">
+                </div>
+                <div class="button-group">
+                    <button id="addCardBtn" class="btn-secondary">+ Add Question</button>
+                    <button id="exportBtn" class="btn-secondary">Export</button>
+                    <button id="deleteAllBtn" class="btn-danger">Delete All</button>
+                    <button id="testBtn" class="btn-primary">Take Test</button>
+                    <button id="studyBtn" class="btn-primary">Review Mode</button>
+                    <button id="newCardsBtn" class="btn-secondary">New Set</button>
+                </div>
+            </div>
+
+            <div class="filter-options">
+                <label>
+                    <input type="checkbox" id="filterAll" checked> All
+                </label>
+                <label>
+                    <input type="checkbox" id="filterNotStudied" checked> Not Studied
+                </label>
+                <label>
+                    <input type="checkbox" id="filterHard" checked> Hard
+                </label>
+                <label>
+                    <input type="checkbox" id="filterMedium" checked> Medium
+                </label>
+                <label>
+                    <input type="checkbox" id="filterEasy" checked> Easy
+                </label>
+                <label>
+                    <input type="checkbox" id="filterMastered" checked> Mastered
+                </label>
+            </div>
+
+            <div id="cardsList" class="cards-list"></div>
+        </div>
+
+        <!-- Study Mode -->
+        <div id="studySection" class="section hidden">
+            <div class="study-header">
+                <div>
+                    <h2>Study Mode</h2>
+                    <div class="study-options">
+                        <label>
+                            <input type="checkbox" id="shuffleMode"> Shuffle
+                        </label>
+                    </div>
+                </div>
+                <div class="progress">
+                    <span id="currentCard">1</span> / <span id="totalCards">0</span>
+                </div>
+            </div>
+
+            <div class="flashcard" id="flashcard">
+                <div class="flashcard-inner">
+                    <div class="flashcard-front">
+                        <div class="card-difficulty-badge" id="frontDifficultyBadge"></div>
+                        <h3>Question</h3>
+                        <p id="questionText"></p>
+                        <button id="flipBtn" class="btn-secondary">Show Answer</button>
+                    </div>
+                    <div class="flashcard-back">
+                        <div class="card-difficulty-badge" id="backDifficultyBadge"></div>
+                        <h3>Answer</h3>
+                        <p id="answerText"></p>
+                        <button id="flipBackBtn" class="btn-secondary">Show Question</button>
+
+                        <div class="difficulty-selector">
+                            <p class="difficulty-prompt">How well did you know this?</p>
+                            <div class="difficulty-buttons">
+                                <button class="diff-btn diff-hard" data-difficulty="hard">Hard</button>
+                                <button class="diff-btn diff-medium" data-difficulty="medium">Medium</button>
+                                <button class="diff-btn diff-easy" data-difficulty="easy">Easy</button>
+                                <button class="diff-btn diff-mastered" data-difficulty="mastered">Mastered</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="study-controls">
+                <button id="prevBtn" class="btn-secondary">← Previous</button>
+                <button id="nextBtn" class="btn-primary">Next →</button>
+                <button id="exitStudyBtn" class="btn-secondary">Exit Study Mode</button>
+            </div>
+        </div>
+
+        <!-- Test Mode -->
+        <div id="testSection" class="section hidden">
+            <div class="test-header">
+                <div>
+                    <h2>Test Mode</h2>
+                    <p class="test-info">Answer the questions and get instant feedback</p>
+                </div>
+                <div class="test-progress">
+                    <span id="currentQuestion">1</span> / <span id="totalQuestions">0</span>
+                    <div class="test-score">Score: <span id="testScore">0</span>/<span id="testTotal">0</span></div>
+                </div>
+            </div>
+
+            <div class="test-card">
+                <div class="question-type-badge" id="questionTypeBadge"></div>
+                <h3>Question</h3>
+                <p id="testQuestion" class="test-question-text"></p>
+
+                <!-- Multiple Choice -->
+                <div id="mcAnswerSection" class="hidden">
+                    <div class="mc-answers">
+                        <button class="mc-answer-btn" data-index="0"><span class="mc-letter">A</span><span class="mc-text" id="mcOption0"></span></button>
+                        <button class="mc-answer-btn" data-index="1"><span class="mc-letter">B</span><span class="mc-text" id="mcOption1"></span></button>
+                        <button class="mc-answer-btn" data-index="2"><span class="mc-letter">C</span><span class="mc-text" id="mcOption2"></span></button>
+                        <button class="mc-answer-btn" data-index="3"><span class="mc-letter">D</span><span class="mc-text" id="mcOption3"></span></button>
+                    </div>
+                </div>
+
+                <!-- Written Answer -->
+                <div id="writtenAnswerSection" class="hidden">
+                    <textarea id="writtenAnswerInput" placeholder="Type your answer here..." rows="6"></textarea>
+                    <button id="submitWrittenBtn" class="btn-primary">Submit Answer</button>
+                </div>
+
+                <!-- Flashcard in Test Mode -->
+                <div id="flashcardTestSection" class="hidden">
+                    <div class="flashcard-test-answer hidden" id="flashcardTestAnswer"></div>
+                    <button id="revealAnswerBtn" class="btn-secondary">Reveal Answer</button>
+                    <div id="selfGradeSection" class="hidden">
+                        <p>Did you get it right?</p>
+                        <div class="self-grade-buttons">
+                            <button class="btn-secondary" data-correct="false">❌ No</button>
+                            <button class="btn-primary" data-correct="true">✓ Yes</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Feedback -->
+                <div id="answerFeedback" class="answer-feedback hidden">
+                    <div class="feedback-content"></div>
+                    <button id="nextQuestionBtn" class="btn-primary">Next Question</button>
+                </div>
+            </div>
+
+            <div class="test-controls">
+                <button id="exitTestBtn" class="btn-secondary">Exit Test</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Manual Card Creation/Editing -->
+    <div id="cardModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Add New Card</h2>
+                <button id="closeModal" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <label for="modalQuestion">Question:</label>
+                <textarea id="modalQuestion" placeholder="Enter the question..." rows="4"></textarea>
+
+                <label>Answer Options (select the correct answer):</label>
+                <div class="mc-option">
+                    <input type="radio" name="correctAnswer" value="0" id="opt0" checked>
+                    <input type="text" id="option0" placeholder="Option A" class="mc-input">
+                    <label for="opt0" class="mc-label">Correct</label>
+                </div>
+                <div class="mc-option">
+                    <input type="radio" name="correctAnswer" value="1" id="opt1">
+                    <input type="text" id="option1" placeholder="Option B" class="mc-input">
+                    <label for="opt1" class="mc-label">Correct</label>
+                </div>
+                <div class="mc-option">
+                    <input type="radio" name="correctAnswer" value="2" id="opt2">
+                    <input type="text" id="option2" placeholder="Option C" class="mc-input">
+                    <label for="opt2" class="mc-label">Correct</label>
+                </div>
+                <div class="mc-option">
+                    <input type="radio" name="correctAnswer" value="3" id="opt3">
+                    <input type="text" id="option3" placeholder="Option D" class="mc-input">
+                    <label for="opt3" class="mc-label">Correct</label>
+                </div>
+
+                <label for="modalExplanation">Explanation (optional):</label>
+                <textarea id="modalExplanation" placeholder="Explain why this is the correct answer..." rows="3"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button id="cancelModal" class="btn-secondary">Cancel</button>
+                <button id="saveCard" class="btn-primary">Save Card</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Modal -->
+    <div id="helpModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Help & Keyboard Shortcuts</h2>
+                <button class="close-btn" onclick="document.getElementById('helpModal').classList.add('hidden')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <h3>Study Mode Shortcuts</h3>
+                <ul class="shortcuts-list">
+                    <li><kbd>Space</kbd> or <kbd>Enter</kbd> - Flip card</li>
+                    <li><kbd>←</kbd> Left Arrow - Previous card</li>
+                    <li><kbd>→</kbd> Right Arrow - Next card</li>
+                    <li><kbd>1</kbd> - Mark as Hard</li>
+                    <li><kbd>2</kbd> - Mark as Medium</li>
+                    <li><kbd>3</kbd> - Mark as Easy</li>
+                    <li><kbd>4</kbd> - Mark as Mastered</li>
+                    <li><kbd>Esc</kbd> - Exit study mode</li>
+                </ul>
+                <h3>Features</h3>
+                <ul>
+                    <li>Generate challenging multiple choice questions from any text using AI</li>
+                    <li>All questions are marked as HARD difficulty for serious study</li>
+                    <li>Questions include explanations of correct answers</li>
+                    <li>Manually create, edit, or delete cards</li>
+                    <li>Export and import question sets</li>
+                    <li>Test mode with instant feedback and scoring</li>
+                    <li>Dark mode for comfortable studying</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Modal -->
+    <div id="statsModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Study Statistics</h2>
+                <button class="close-btn" onclick="document.getElementById('statsModal').classList.add('hidden')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalCardsCount">0</div>
+                        <div class="stat-label">Total Cards</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="studiedCount">0</div>
+                        <div class="stat-label">Cards Studied</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="masteredCount">0</div>
+                        <div class="stat-label">Mastered</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="studySessionsCount">0</div>
+                        <div class="stat-label">Study Sessions</div>
+                    </div>
+                </div>
+                <div class="difficulty-breakdown">
+                    <h3>Progress Breakdown</h3>
+                    <div class="progress-bar">
+                        <div class="progress-segment progress-mastered" id="progressMastered"></div>
+                        <div class="progress-segment progress-easy" id="progressEasy"></div>
+                        <div class="progress-segment progress-medium" id="progressMedium"></div>
+                        <div class="progress-segment progress-hard" id="progressHard"></div>
+                        <div class="progress-segment progress-unstudied" id="progressUnstudied"></div>
+                    </div>
+                    <div class="progress-legend">
+                        <span class="legend-item"><span class="legend-color mastered"></span> Mastered: <span id="legendMastered">0</span></span>
+                        <span class="legend-item"><span class="legend-color easy"></span> Easy: <span id="legendEasy">0</span></span>
+                        <span class="legend-item"><span class="legend-color medium"></span> Medium: <span id="legendMedium">0</span></span>
+                        <span class="legend-item"><span class="legend-color hard"></span> Hard: <span id="legendHard">0</span></span>
+                        <span class="legend-item"><span class="legend-color unstudied"></span> Not Studied: <span id="legendUnstudied">0</span></span>
+                    </div>
+                </div>
+                <button id="resetStats" class="btn-secondary" style="margin-top: 20px;">Reset Statistics</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden file inputs for import -->
+    <input type="file" id="fileInput" accept=".json" class="hidden">
+    <input type="file" id="studyFileInput" accept=".txt,.md,.doc,.docx" class="hidden">
+
+    <script src="script.js"></script>
+</body>
+</html>
