@@ -1,0 +1,13 @@
+{
+  "name": "ai-flashcard-generator",
+  "version": "1.0.0",
+  "description": "Modern AI-powered flashcard and quiz generation app",
+  "dependencies": {
+    "@simplewebauthn/browser": "^10.0.0",
+    "firebase": "^10.8.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "deploy": "firebase deploy"
+  }
+}
