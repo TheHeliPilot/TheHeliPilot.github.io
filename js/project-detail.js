@@ -193,8 +193,158 @@ async function saveNotes() {
 
 // Regenerate project (test cards and study cards)
 async function regenerateProject() {
-    showNotification('Regenerate Project feature coming soon!', 'info');
-    // This feature will be implemented later
+    try {
+        if (!window.auth || !window.auth.currentUser || !currentProject) {
+            showNotification('Please log in to regenerate project', 'error');
+            return;
+        }
+
+        if (!quillEditor) {
+            showNotification('Editor not initialized', 'error');
+            return;
+        }
+
+        // Confirm action
+        if (!confirm('This will regenerate all test cards and study cards from your notes. Continue?')) {
+            return;
+        }
+
+        const notesText = quillEditor.getText().trim();
+
+        if (!notesText || notesText.length < 50) {
+            showNotification('Please add more content to your notes (at least 50 characters)', 'error');
+            return;
+        }
+
+        // Check if user is Pro or Dev
+        const isPro = window.isProUser || false;
+        const isDev = window.isDevUser || false;
+        const isAdmin = window.isAdminUser || false;
+
+        if (!isPro && !isDev && !isAdmin) {
+            showNotification('Regenerate Project is a Pro/Dev feature. Contact support to upgrade.', 'error');
+            return;
+        }
+
+        // Show loading
+        const regenerateBtn = document.getElementById('regenerateProjectBtn');
+        const originalText = regenerateBtn.innerHTML;
+        regenerateBtn.disabled = true;
+        regenerateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating study cards...';
+
+        const user = window.auth.currentUser;
+        const model = 'gpt-5-nano-2025-08-07';
+        const quizCount = 30;
+
+        // Import Firebase functions
+        const { ref, push, update } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
+
+        // Step 1: Generate study cards
+        const studyCardsResponse = await fetch('https://quizapp2-eight.vercel.app/api/generate-study-cards', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userId: user.uid,
+                isPro: isPro || isDev || isAdmin,
+                text: notesText,
+                model: model
+            })
+        });
+
+        if (!studyCardsResponse.ok) {
+            const error = await studyCardsResponse.json();
+            throw new Error(error.error || 'Failed to generate study cards');
+        }
+
+        const studyCardsData = await studyCardsResponse.json();
+
+        // Step 2: Generate quiz cards
+        regenerateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating test cards...';
+
+        const quizCardsResponse = await fetch('https://quizapp2-eight.vercel.app/api/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userId: user.uid,
+                isPro: isPro || isDev || isAdmin,
+                text: notesText,
+                count: quizCount,
+                model: model,
+                difficulty: 'mixed'
+            })
+        });
+
+        if (!quizCardsResponse.ok) {
+            const error = await quizCardsResponse.json();
+            throw new Error(error.error || 'Failed to generate test cards');
+        }
+
+        const quizCardsData = await quizCardsResponse.json();
+
+        // Step 3: Save everything
+        regenerateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving to project...';
+
+        // Save quiz cards
+        const cardsRef = ref(window.db, `users/${user.uid}/cards`);
+        for (const card of quizCardsData.cards) {
+            const cardData = {
+                projectId: currentProject.id,
+                question: card.question,
+                options: card.options,
+                correctAnswer: card.correctAnswer,
+                explanation: card.explanation || '',
+                difficulty: card.difficulty || 'medium',
+                mastered: false,
+                createdAt: Date.now()
+            };
+            await push(cardsRef, cardData);
+        }
+
+        // Save study cards to project
+        const projectRef = ref(window.db, `users/${user.uid}/projects/${currentProject.id}`);
+        await update(projectRef, {
+            studyCards: studyCardsData.cards,
+            studyCardsCount: studyCardsData.count,
+            updatedAt: new Date().toISOString()
+        });
+
+        // Update local project data
+        currentProject.studyCards = studyCardsData.cards;
+        currentProject.studyCardsCount = studyCardsData.count;
+
+        if (window.projects) {
+            const projectIndex = window.projects.findIndex(p => p.id === currentProject.id);
+            if (projectIndex !== -1) {
+                window.projects[projectIndex].studyCards = studyCardsData.cards;
+                window.projects[projectIndex].studyCardsCount = studyCardsData.count;
+            }
+        }
+
+        // Reload cards from database
+        if (window.loadCards) {
+            await window.loadCards();
+        }
+
+        // Success!
+        showNotification(`Generated ${studyCardsData.count} study cards and ${quizCardsData.cards.length} test cards!`, 'success');
+
+        // Reload the cards display
+        loadTestCards(currentProject.id);
+        loadStudyCards(currentProject.id);
+
+        regenerateBtn.disabled = false;
+        regenerateBtn.innerHTML = originalText;
+
+    } catch (error) {
+        console.error('Error regenerating project:', error);
+        showNotification('Failed to regenerate project: ' + error.message, 'error');
+
+        const regenerateBtn = document.getElementById('regenerateProjectBtn');
+        if (regenerateBtn) {
+            regenerateBtn.disabled = false;
+            regenerateBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Regenerate Project';
+        }
+    }
 }
 
 // Load test cards

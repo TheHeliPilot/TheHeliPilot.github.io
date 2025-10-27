@@ -524,17 +524,6 @@ function initProjects() {
         document.getElementById('projectDescInput').value = '';
         document.getElementById('projectColorInput').value = '#1db954';
 
-        // Show generation option for new projects
-        const generateCheckbox = document.getElementById('generateOnCreate');
-        const generateSection = document.getElementById('generateContentSection');
-        if (generateCheckbox) {
-            generateCheckbox.checked = false;
-            generateCheckbox.parentElement.style.display = 'block';
-        }
-        if (generateSection) {
-            generateSection.classList.add('hidden');
-        }
-
         openModal('projectModal');
     });
 
@@ -542,16 +531,9 @@ function initProjects() {
         const name = document.getElementById('projectNameInput').value.trim();
         const description = document.getElementById('projectDescInput').value.trim();
         const color = document.getElementById('projectColorInput').value;
-        const generateOnCreate = document.getElementById('generateOnCreate')?.checked;
-        const content = document.getElementById('projectContentInput')?.value.trim();
 
         if (!name) {
             showNotification('Please enter a project name', 'error');
-            return;
-        }
-
-        if (generateOnCreate && !content) {
-            showNotification('Please enter study material content', 'error');
             return;
         }
 
@@ -563,38 +545,17 @@ function initProjects() {
                 createdAt: Date.now()
             };
 
-            let newProjectId = editingProject;
-
             if (editingProject) {
                 const projectRef = ref(window.db, `users/${currentUser.uid}/projects/${editingProject}`);
                 await update(projectRef, projectData);
                 showNotification('Project updated successfully', 'success');
             } else {
                 const projectsRef = ref(window.db, `users/${currentUser.uid}/projects`);
-                const newProject = await push(projectsRef, projectData);
-                newProjectId = newProject.key;
+                await push(projectsRef, projectData);
                 showNotification('Project created successfully', 'success');
             }
 
             closeModal('projectModal');
-
-            // Generate study materials if requested
-            if (generateOnCreate && !editingProject && newProjectId) {
-                window.currentGeneratingProjectId = newProjectId;
-
-                // Auto-fill the study materials modal
-                document.getElementById('studyMaterialInput').value = content;
-                document.getElementById('studyMaterialModel').value = document.getElementById('projectAIModel').value;
-                document.getElementById('quizCardCount').value = document.getElementById('projectQuizCount').value;
-
-                // Trigger generation
-                openModal('studyMaterialsModal');
-
-                // Auto-click generate after modal opens
-                setTimeout(() => {
-                    document.getElementById('generateStudyMaterialsBtn').click();
-                }, 500);
-            }
 
             await loadProjects();
             updateDashboard();
@@ -614,17 +575,6 @@ window.editProject = async function(projectId) {
     document.getElementById('projectNameInput').value = project.name;
     document.getElementById('projectDescInput').value = project.description || '';
     document.getElementById('projectColorInput').value = project.color || '#1db954';
-
-    // Hide generation option when editing
-    const generateCheckbox = document.getElementById('generateOnCreate');
-    const generateSection = document.getElementById('generateContentSection');
-    if (generateCheckbox) {
-        generateCheckbox.checked = false;
-        generateCheckbox.parentElement.style.display = 'none';
-    }
-    if (generateSection) {
-        generateSection.classList.add('hidden');
-    }
 
     openModal('projectModal');
 };
