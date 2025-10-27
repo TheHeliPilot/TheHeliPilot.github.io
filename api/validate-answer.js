@@ -37,7 +37,7 @@ export default async function handler(req, res) {
     }
 
     // Check if answer is correct
-    const isCorrect = parseInt(selectedAnswer) === card.correctAnswer;
+    const isCorrect = parseInt(selectedAnswer) === parseInt(card.correctAnswer);
 
     // Return result without exposing the correct answer directly
     return res.status(200).json({

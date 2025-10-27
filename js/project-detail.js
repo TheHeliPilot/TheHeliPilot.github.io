@@ -781,8 +781,32 @@ function loadStudyCards(projectId) {
                         <input type="text" class="text-input study-card-title" value="${escapeHtml(card.topic || card.term || card.name || card.title || '')}" />
                     </div>
                     <div class="form-group" style="margin-bottom: var(--spacing-md);">
-                        <label>Description</label>
-                        <textarea class="text-input study-card-description" rows="3">${escapeHtml(card.content || card.definition || card.description || '')}</textarea>
+                        <label>Content</label>
+                        <textarea class="text-input study-card-content" rows="3">${escapeHtml(card.content || card.definition || card.description || '')}</textarea>
+                    </div>
+                    <div class="form-group" style="margin-bottom: var(--spacing-md);">
+                        <label>Parent Card</label>
+                        <select class="text-input study-card-parent">
+                            <option value="">No Parent (Root Level)</option>
+                            ${studyCards.map((c, i) => i !== index ? `<option value="${i}" ${card.parentIndex === i ? 'selected' : ''}>${escapeHtml(c.topic || c.term || `Card ${i + 1}`)}</option>` : '').join('')}
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom: var(--spacing-md);">
+                        <label>Category</label>
+                        <select class="text-input study-card-category">
+                            <option value="primary" ${(card.category || 'primary') === 'primary' ? 'selected' : ''}>Primary</option>
+                            <option value="secondary" ${card.category === 'secondary' ? 'selected' : ''}>Secondary</option>
+                            <option value="tertiary" ${card.category === 'tertiary' ? 'selected' : ''}>Tertiary</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom: var(--spacing-md);">
+                        <label>Color</label>
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            ${['#667eea', '#f093fb', '#4facfe', '#43e97b', '#fa709a', '#feca57', '#ff6b6b', '#48dbfb'].map(color => `
+                                <div class="color-picker-option ${(card.color || '#667eea') === color ? 'selected' : ''}" data-color="${color}" style="width: 30px; height: 30px; background: ${color}; border-radius: 50%; cursor: pointer; border: 2px solid ${(card.color || '#667eea') === color ? 'var(--text)' : 'transparent'};"></div>
+                            `).join('')}
+                        </div>
+                        <input type="hidden" class="study-card-color" value="${card.color || '#667eea'}" />
                     </div>
                     <div style="display: flex; gap: var(--spacing-sm);">
                         <button class="btn btn-primary btn-sm save-study-card" data-card-index="${index}">
@@ -836,6 +860,26 @@ function loadStudyCards(projectId) {
             });
         });
 
+        // Add color picker handlers for edit forms
+        document.querySelectorAll('.study-card-edit-form .color-picker-option').forEach(option => {
+            option.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const color = option.dataset.color;
+                const editForm = option.closest('.study-card-edit-form');
+
+                // Update visual selection
+                editForm.querySelectorAll('.color-picker-option').forEach(opt => {
+                    opt.classList.remove('selected');
+                    opt.style.border = '2px solid transparent';
+                });
+                option.classList.add('selected');
+                option.style.border = '2px solid var(--text)';
+
+                // Update hidden input
+                editForm.querySelector('.study-card-color').value = color;
+            });
+        });
+
     } catch (error) {
         console.error('Error loading study cards:', error);
     }
@@ -846,20 +890,38 @@ async function saveStudyCardEdit(cardIndex) {
     try {
         const cardEl = document.querySelector(`.study-card[data-card-index="${cardIndex}"]`);
         const titleInput = cardEl.querySelector('.study-card-title');
-        const descInput = cardEl.querySelector('.study-card-description');
+        const contentInput = cardEl.querySelector('.study-card-content');
+        const parentSelect = cardEl.querySelector('.study-card-parent');
+        const categorySelect = cardEl.querySelector('.study-card-category');
+        const colorInput = cardEl.querySelector('.study-card-color');
 
         const newTitle = titleInput.value.trim();
-        const newDescription = descInput.value.trim();
+        const newContent = contentInput.value.trim();
+        const parentValue = parentSelect.value;
+        const category = categorySelect.value;
+        const color = colorInput.value;
 
         if (!newTitle) {
             showNotification('Title cannot be empty', 'error');
             return;
         }
 
+        if (!newContent) {
+            showNotification('Content cannot be empty', 'error');
+            return;
+        }
+
         // Update the study card in the project
         if (currentProject.studyCards && currentProject.studyCards[cardIndex]) {
+            const parentIndex = parentValue === '' ? null : parseInt(parentValue);
+            const level = parentValue === '' ? 0 : (currentProject.studyCards[parseInt(parentValue)].level + 1);
+
             currentProject.studyCards[cardIndex].topic = newTitle;
-            currentProject.studyCards[cardIndex].content = newDescription;
+            currentProject.studyCards[cardIndex].content = newContent;
+            currentProject.studyCards[cardIndex].parentIndex = parentIndex;
+            currentProject.studyCards[cardIndex].level = level;
+            currentProject.studyCards[cardIndex].category = category;
+            currentProject.studyCards[cardIndex].color = color;
 
             // Save to Firebase
             const { ref, update } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
@@ -1065,62 +1127,40 @@ function renderMindMap() {
     const width = mindMapContainer.clientWidth;
     const height = mindMapContainer.clientHeight;
 
-    console.log('Rendering tree mind map with cards:', studyCards);
+    console.log('Rendering physics-based mind map with cards:', studyCards);
 
-    // Build hierarchical tree structure from study cards
-    function buildTreeStructure(cards) {
-        // Create a map of all nodes
-        const nodesMap = new Map();
-        cards.forEach((card, index) => {
-            nodesMap.set(index, {
-                id: index,
-                name: card.topic || card.term || card.name || card.title || `Card ${index + 1}`,
-                definition: card.content || card.definition || card.description || '',
-                level: card.level || 0,
-                color: card.color || '#667eea',
-                children: []
-            });
-        });
+    // Track mouse position for attraction force
+    let mouseX = width / 2;
+    let mouseY = height / 2;
 
-        // Link children to parents using parentIndex
+    // Build nodes and links for force simulation
+    function buildForceData(cards) {
+        const nodes = cards.map((card, index) => ({
+            id: index,
+            name: card.topic || card.term || card.name || card.title || `Card ${index + 1}`,
+            definition: card.content || card.definition || card.description || '',
+            level: card.level || 0,
+            color: card.color || '#667eea',
+            parentIndex: card.parentIndex,
+            x: width / 2 + (Math.random() - 0.5) * 200,
+            y: height / 2 + (Math.random() - 0.5) * 200
+        }));
+
+        const links = [];
         cards.forEach((card, index) => {
-            if (card.parentIndex !== null && card.parentIndex !== undefined) {
-                const parent = nodesMap.get(card.parentIndex);
-                const child = nodesMap.get(index);
-                if (parent && child) {
-                    parent.children.push(child);
-                }
+            if (card.parentIndex !== null && card.parentIndex !== undefined && card.parentIndex >= 0) {
+                links.push({
+                    source: card.parentIndex,
+                    target: index
+                });
             }
         });
 
-        // Find root nodes (nodes with parentIndex === null or level 0)
-        const roots = [];
-        cards.forEach((card, index) => {
-            if (card.parentIndex === null || card.parentIndex === undefined) {
-                roots.push(nodesMap.get(index));
-            }
-        });
-
-        // If no roots found, use first card
-        if (roots.length === 0 && cards.length > 0) {
-            roots.push(nodesMap.get(0));
-        }
-
-        // If multiple roots, create a virtual root
-        if (roots.length > 1) {
-            return {
-                name: project.name,
-                definition: 'Project Root',
-                level: -1,
-                children: roots
-            };
-        }
-
-        return roots[0] || { name: 'Empty', children: [] };
+        return { nodes, links };
     }
 
-    const treeData = buildTreeStructure(studyCards);
-    console.log('Tree structure:', treeData);
+    const { nodes, links } = buildForceData(studyCards);
+    console.log('Force simulation data:', { nodes, links });
 
     // Setup SVG
     const svg = d3.select(svgElement);
@@ -1139,59 +1179,83 @@ function renderMindMap() {
 
     svg.call(zoom);
 
+    // Mouse tracking for attraction force
+    svg.on('mousemove', (event) => {
+        const [x, y] = d3.pointer(event);
+        mouseX = x;
+        mouseY = y;
+    });
+
     // Double-click to reset
     svg.on('dblclick.zoom', null);
     svg.on('dblclick', () => {
         svg.transition().duration(750).call(
             zoom.transform,
-            d3.zoomIdentity.translate(100, height / 2).scale(1)
+            d3.zoomIdentity
         );
     });
 
-    // Create defs for potential filters/patterns (keeping for future use)
-    const defs = svg.append('defs');
+    // Create force simulation with springy physics
+    const simulation = d3.forceSimulation(nodes)
+        .force('link', d3.forceLink(links)
+            .id(d => d.id)
+            .distance(150)
+            .strength(0.3))
+        .force('charge', d3.forceManyBody()
+            .strength(-800)
+            .distanceMax(400))
+        .force('collision', d3.forceCollide()
+            .radius(80)
+            .strength(0.7))
+        .force('center', d3.forceCenter(width / 2, height / 2)
+            .strength(0.05))
+        .force('mouse', d => {
+            // Custom force to attract nodes towards mouse
+            const strength = 0.1;
+            nodes.forEach(node => {
+                const dx = mouseX - node.x;
+                const dy = mouseY - node.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance > 0) {
+                    const factor = strength / distance;
+                    node.vx += dx * factor;
+                    node.vy += dy * factor;
+                }
+            });
+        })
+        .alphaDecay(0.02)
+        .velocityDecay(0.3);
 
-    // Create tree layout
-    const treeLayout = d3.tree()
-        .size([height - 100, width - 300])
-        .separation((a, b) => (a.parent === b.parent ? 1 : 1.5));
-
-    // Create hierarchy
-    const root = d3.hierarchy(treeData);
-    treeLayout(root);
-
-    // Draw links (tree branches)
-    const links = container.selectAll('.mind-map-link')
-        .data(root.links())
-        .enter().append('path')
+    // Draw links (springy connections)
+    const linkElements = container.selectAll('.mind-map-link')
+        .data(links)
+        .enter().append('line')
         .attr('class', 'mind-map-link')
-        .attr('d', d3.linkHorizontal()
-            .x(d => d.y + 100)
-            .y(d => d.x + 50))
-        .attr('fill', 'none')
         .attr('stroke', '#3c4652')
-        .attr('stroke-width', 2)
-        .attr('stroke-opacity', 0.5);
+        .attr('stroke-width', 3)
+        .attr('stroke-opacity', 0.6);
 
     // Draw nodes
-    const nodes = container.selectAll('.mind-map-node')
-        .data(root.descendants())
+    const nodeGroups = container.selectAll('.mind-map-node')
+        .data(nodes)
         .enter().append('g')
         .attr('class', 'mind-map-node')
-        .attr('transform', d => `translate(${d.y + 100},${d.x + 50})`)
-        .attr('data-node-id', d => d.data.id);
+        .attr('data-node-id', d => d.id)
+        .call(d3.drag()
+            .on('start', dragStarted)
+            .on('drag', dragged)
+            .on('end', dragEnded));
 
     // Calculate rectangle dimensions based on text length
     const getRectWidth = (d) => {
-        const textLength = d.data.name.length;
-        // Dynamic width: 8px per character + padding, no maximum limit
+        const textLength = d.name.length;
         return Math.max(140, textLength * 8.5 + 50);
     };
     const rectHeight = 56;
     const accentWidth = 6;
 
     // Main dark rectangle background
-    nodes.append('rect')
+    nodeGroups.append('rect')
         .attr('x', d => -getRectWidth(d) / 2)
         .attr('y', -rectHeight / 2)
         .attr('width', d => getRectWidth(d))
@@ -1202,31 +1266,31 @@ function renderMindMap() {
         .attr('stroke', '#3c4652')
         .attr('stroke-width', 1)
         .style('filter', 'drop-shadow(0 4px 8px rgba(0,0,0,0.4))')
-        .style('cursor', 'pointer');
+        .style('cursor', 'grab');
 
     // Colored accent bar on the left
-    nodes.append('rect')
+    nodeGroups.append('rect')
         .attr('x', d => -getRectWidth(d) / 2)
         .attr('y', -rectHeight / 2)
         .attr('width', accentWidth)
         .attr('height', rectHeight)
         .attr('rx', 8)
         .attr('ry', 8)
-        .attr('fill', d => d.data.color || '#667eea')
-        .style('cursor', 'pointer')
+        .attr('fill', d => d.color || '#667eea')
+        .style('cursor', 'grab')
         .attr('pointer-events', 'none');
 
-    // Small color dot indicator in top right (for visual balance)
-    nodes.append('circle')
+    // Small color dot indicator in top right
+    nodeGroups.append('circle')
         .attr('cx', d => getRectWidth(d) / 2 - 12)
         .attr('cy', -rectHeight / 2 + 12)
         .attr('r', 4)
-        .attr('fill', d => d.data.color || '#667eea')
+        .attr('fill', d => d.color || '#667eea')
         .attr('pointer-events', 'none');
 
-    // Name label inside rectangle (left-aligned, after the accent bar)
-    nodes.append('text')
-        .text(d => d.data.name)
+    // Name label inside rectangle
+    nodeGroups.append('text')
+        .text(d => d.name)
         .attr('x', d => -getRectWidth(d) / 2 + accentWidth + 12)
         .attr('text-anchor', 'start')
         .attr('dy', -5)
@@ -1235,9 +1299,9 @@ function renderMindMap() {
         .attr('font-weight', '600')
         .attr('pointer-events', 'none');
 
-    // Level label inside rectangle (below title, left-aligned)
-    nodes.append('text')
-        .text(d => d.data.level >= 0 ? `Level ${d.data.level}` : '')
+    // Level label inside rectangle
+    nodeGroups.append('text')
+        .text(d => d.level >= 0 ? `Level ${d.level}` : '')
         .attr('x', d => -getRectWidth(d) / 2 + accentWidth + 12)
         .attr('text-anchor', 'start')
         .attr('dy', 12)
@@ -1247,22 +1311,20 @@ function renderMindMap() {
         .attr('pointer-events', 'none');
 
     // Hover and click effects
-    nodes.on('mouseenter', function(event, d) {
-        // Highlight the main background rect (first rect)
+    nodeGroups.on('mouseenter', function(event, d) {
         d3.select(this).selectAll('rect').filter((d, i) => i === 0)
             .transition().duration(200)
             .attr('stroke', '#1db954')
             .attr('stroke-width', 2)
             .style('filter', 'drop-shadow(0 6px 12px rgba(0,0,0,0.6))');
 
-        // Brighten the accent bar
         d3.select(this).selectAll('rect').filter((d, i) => i === 1)
             .transition().duration(200)
             .attr('width', accentWidth + 2);
 
         if (tooltip) {
-            tooltip.querySelector('h4').textContent = d.data.name;
-            tooltip.querySelector('p').textContent = d.data.definition || 'No description';
+            tooltip.querySelector('h4').textContent = d.name;
+            tooltip.querySelector('p').textContent = d.definition || 'No description';
             tooltip.style.opacity = '1';
         }
     })
@@ -1274,14 +1336,12 @@ function renderMindMap() {
         }
     })
     .on('mouseleave', function(event, d) {
-        // Reset the main background rect
         d3.select(this).selectAll('rect').filter((d, i) => i === 0)
             .transition().duration(200)
             .attr('stroke', '#3c4652')
             .attr('stroke-width', 1)
             .style('filter', 'drop-shadow(0 4px 8px rgba(0,0,0,0.4))');
 
-        // Reset the accent bar
         d3.select(this).selectAll('rect').filter((d, i) => i === 1)
             .transition().duration(200)
             .attr('width', accentWidth);
@@ -1292,13 +1352,42 @@ function renderMindMap() {
     })
     .on('click', function(event, d) {
         event.stopPropagation();
-        if (d.data.id !== undefined) {
-            showMindMapColorPicker(event, d.data.id);
+        if (d.id !== undefined) {
+            showMindMapColorPicker(event, d.id);
         }
     });
 
-    // Center the view initially
-    svg.call(zoom.transform, d3.zoomIdentity.translate(100, height / 2).scale(1));
+    // Update positions on each simulation tick
+    simulation.on('tick', () => {
+        linkElements
+            .attr('x1', d => d.source.x)
+            .attr('y1', d => d.source.y)
+            .attr('x2', d => d.target.x)
+            .attr('y2', d => d.target.y);
+
+        nodeGroups
+            .attr('transform', d => `translate(${d.x},${d.y})`);
+    });
+
+    // Drag functions
+    function dragStarted(event, d) {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
+        d3.select(this).style('cursor', 'grabbing');
+    }
+
+    function dragged(event, d) {
+        d.fx = event.x;
+        d.fy = event.y;
+    }
+
+    function dragEnded(event, d) {
+        if (!event.active) simulation.alphaTarget(0);
+        d.fx = null;
+        d.fy = null;
+        d3.select(this).style('cursor', 'grab');
+    }
 }
 
 // Helper functions
