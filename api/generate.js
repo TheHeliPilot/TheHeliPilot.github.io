@@ -65,7 +65,7 @@ ${text}`;
             content: prompt
           }
         ],
-        temperature: 0.7,
+        temperature: 1.0,
         max_completion_tokens: 2000
       })
     });

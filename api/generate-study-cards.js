@@ -65,27 +65,34 @@ Rules:
 Study Material:
 ${text}`;
 
+    // GPT-5 Nano only supports default temperature (1), others can use 0.7
+    const requestBody = {
+      model: selectedModel,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are an educational content creator that structures information hierarchically for mind mapping. Always return valid JSON arrays only.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      max_completion_tokens: 4000
+    };
+
+    // Only add temperature for non-5-nano models
+    if (selectedModel !== 'gpt-5-nano') {
+      requestBody.temperature = 1.0;
+    }
+
     const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
       },
-      body: JSON.stringify({
-        model: selectedModel,
-        messages: [
-          {
-            role: 'system',
-            content: 'You are an educational content creator that structures information hierarchically for mind mapping. Always return valid JSON arrays only.'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.7,
-        max_completion_tokens: 4000
-      })
+      body: JSON.stringify(requestBody)
     });
 
     if (!openaiResponse.ok) {
