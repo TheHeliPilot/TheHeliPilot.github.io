@@ -2187,6 +2187,8 @@ select:hover,
 /* Notes Editor */
 .notes-toolbar {
     display: flex;
+    justify-content: space-between;
+    align-items: center;
     gap: var(--spacing-md);
     margin-bottom: var(--spacing-lg);
     padding-bottom: var(--spacing-lg);
@@ -2224,8 +2226,9 @@ select:hover,
 }
 
 .ql-editor.ql-blank::before {
-    color: var(--text-muted);
+    color: #ffffff;
     font-style: italic;
+    opacity: 0.5;
 }
 
 .ql-snow .ql-stroke {

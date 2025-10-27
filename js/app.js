@@ -29,7 +29,8 @@ window.currentUser = null;
 let currentUser = window.currentUser; // Keep local reference for convenience
 window.projects = []; // Expose to other modules like study-materials.js
 let projects = window.projects; // Keep local reference for convenience
-let cards = [];
+window.cards = []; // Expose to other modules
+let cards = window.cards; // Keep local reference for convenience
 let currentTest = null;
 let editingProject = null;
 let editingCard = null;
@@ -393,6 +394,7 @@ async function loadProjects() {
         const snapshot = await get(projectsRef);
 
         projects = [];
+        window.projects = []; // Sync with window
         if (snapshot.exists()) {
             const data = snapshot.val();
             projects = Object.keys(data).map(key => ({
@@ -401,6 +403,7 @@ async function loadProjects() {
             }));
             // Sort by createdAt descending
             projects.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+            window.projects = projects; // Sync with window
         }
 
         renderProjects();
@@ -419,12 +422,14 @@ async function loadCards() {
         const snapshot = await get(cardsRef);
 
         cards = [];
+        window.cards = []; // Sync with window
         if (snapshot.exists()) {
             const data = snapshot.val();
             cards = Object.keys(data).map(key => ({
                 id: key,
                 ...data[key]
             }));
+            window.cards = cards; // Sync with window
         }
 
         renderCards();
