@@ -250,16 +250,22 @@ body {
     transform: translateY(-2px);
 }
 
-.btn-passkey {
+.btn-google {
     width: 100%;
-    background: linear-gradient(135deg, var(--info), #7fb8ff);
-    color: white;
+    background: white;
+    color: #1f1f1f;
     font-size: 1rem;
     padding: 1rem;
+    border: 1px solid #dadce0;
 }
 
-.btn-passkey:hover {
-    background: linear-gradient(135deg, #4a94ff, #5fa8ff);
+.btn-google:hover {
+    background: #f8f9fa;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.btn-google i {
+    color: #4285f4;
 }
 
 .btn-text {
@@ -1419,6 +1425,273 @@ select:hover,
     color: var(--text-primary);
 }
 
+/* === STUDY MODE === */
+.study-setup {
+    max-width: 500px;
+    margin: 0 auto;
+    padding: var(--spacing-xl);
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+}
+
+.study-setup h3 {
+    margin-bottom: var(--spacing-lg);
+    text-align: center;
+    color: var(--text-primary);
+}
+
+.study-active {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.study-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-xl);
+    padding: var(--spacing-md);
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+}
+
+.study-progress {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.study-progress span {
+    color: var(--primary);
+}
+
+.btn-sm {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+}
+
+/* Study card container */
+.study-card-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-lg);
+    margin-bottom: var(--spacing-xl);
+    min-height: 500px;
+}
+
+/* Navigation buttons */
+.study-nav-btn {
+    background: var(--surface);
+    border: 2px solid var(--border);
+    color: var(--text-primary);
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all var(--transition-base);
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.study-nav-btn:hover:not(:disabled) {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+    transform: scale(1.1);
+}
+
+.study-nav-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+/* Study card - 3D flip effect */
+.study-card {
+    width: 100%;
+    max-width: 700px;
+    height: 500px;
+    perspective: 1000px;
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+}
+
+/* Swipe animations */
+@keyframes slideOutLeft {
+    from {
+        transform: translateX(0) scale(1);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(-120%) scale(0.8);
+        opacity: 0;
+    }
+}
+
+@keyframes slideOutRight {
+    from {
+        transform: translateX(0) scale(1);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(120%) scale(0.8);
+        opacity: 0;
+    }
+}
+
+@keyframes slideInLeft {
+    from {
+        transform: translateX(-120%) scale(0.8);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0) scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(120%) scale(0.8);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0) scale(1);
+        opacity: 1;
+    }
+}
+
+.study-card.swipe-out-left {
+    animation: slideOutLeft 0.4s ease-in-out forwards;
+}
+
+.study-card.swipe-out-right {
+    animation: slideOutRight 0.4s ease-in-out forwards;
+}
+
+.study-card.swipe-in-left {
+    animation: slideInLeft 0.4s ease-in-out forwards;
+}
+
+.study-card.swipe-in-right {
+    animation: slideInRight 0.4s ease-in-out forwards;
+}
+
+.study-card-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transition: transform 0.6s;
+    transform-style: preserve-3d;
+}
+
+.study-card.flipped .study-card-inner {
+    transform: rotateY(180deg);
+}
+
+.study-card-front,
+.study-card-back {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: var(--radius-xl);
+    padding: var(--spacing-2xl);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    box-shadow: var(--shadow-lg);
+}
+
+.study-card-back {
+    transform: rotateY(180deg);
+    background: linear-gradient(135deg, var(--surface) 0%, var(--surface-light) 100%);
+    border-color: var(--primary);
+}
+
+.study-card-label {
+    position: absolute;
+    top: var(--spacing-lg);
+    left: var(--spacing-lg);
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+}
+
+.study-card-back .study-card-label {
+    color: var(--primary);
+}
+
+.study-card-content {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.6;
+    margin-bottom: var(--spacing-lg);
+}
+
+.study-card-explanation {
+    margin-top: var(--spacing-lg);
+    padding: var(--spacing-md);
+    background: rgba(29, 185, 84, 0.1);
+    border-radius: var(--radius-md);
+    font-size: 1rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.study-card-explanation:empty {
+    display: none;
+}
+
+.study-card-hint {
+    position: absolute;
+    bottom: var(--spacing-lg);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    opacity: 0.7;
+}
+
+.study-card-hint i {
+    font-size: 1rem;
+}
+
+/* Show mobile/desktop hints based on screen size */
+.mobile-hint {
+    display: none;
+}
+
+.desktop-hint {
+    display: inline;
+}
+
+.study-swipe-hint {
+    display: none;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    gap: var(--spacing-sm);
+    align-items: center;
+    justify-content: center;
+}
+
 /* === MOBILE MENU TOGGLE === */
 .menu-toggle {
     display: none;
@@ -1689,6 +1962,107 @@ select:hover,
     .project-actions {
         gap: var(--spacing-xs);
     }
+
+    /* AI tabs mobile */
+    .ai-tab {
+        padding: var(--spacing-sm);
+        font-size: 0.75rem;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .ai-tab i {
+        font-size: 1.125rem;
+        margin-right: 0;
+    }
+
+    /* Study mode mobile */
+    .study-nav-btn {
+        display: none;
+    }
+
+    .study-card {
+        max-width: 100%;
+        height: 400px;
+    }
+
+    .study-card-content {
+        font-size: 1.25rem;
+    }
+
+    .study-card-front,
+    .study-card-back {
+        padding: var(--spacing-lg);
+    }
+
+    .study-swipe-hint {
+        display: flex;
+    }
+
+    .mobile-hint {
+        display: inline;
+    }
+
+    .desktop-hint {
+        display: none;
+    }
+
+    .study-card-container {
+        min-height: 400px;
+        gap: 0;
+    }
+}
+
+/* === ADMIN CONSOLE === */
+.admin-tabs {
+    display: flex;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-xl);
+    border-bottom: 2px solid var(--border);
+    flex-wrap: wrap;
+}
+
+.admin-tab {
+    padding: var(--spacing-md) var(--spacing-lg);
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-base);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    margin-bottom: -2px;
+    font-size: 0.938rem;
+}
+
+.admin-tab:hover {
+    color: var(--text-primary);
+    background: var(--surface-light);
+}
+
+.admin-tab.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+.admin-tab-content {
+    display: none;
+}
+
+.admin-tab-content.active {
+    display: block;
+}
+
+/* === PUBLIC PROJECT CARDS === */
+.public-project-card {
+    border-left-color: #9d4edd !important;
+}
+
+.public-project-card:hover {
+    border-color: #9d4edd;
 }
 
 /* Small phones (max-width: 480px) */
@@ -1733,5 +2107,15 @@ select:hover,
     .actions-group .btn {
         min-width: 100px;
         font-size: 0.875rem;
+    }
+
+    .admin-tabs {
+        overflow-x: auto;
+    }
+
+    .admin-tab {
+        padding: var(--spacing-sm);
+        font-size: 0.75rem;
+        white-space: nowrap;
     }
 }
