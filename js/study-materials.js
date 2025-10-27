@@ -258,19 +258,23 @@ function renderStudyCardsList() {
     const level0 = cards.filter(c => c.level === 0);
     const level1 = cards.filter(c => c.level === 1);
     const level2 = cards.filter(c => c.level === 2);
+    const level3 = cards.filter(c => c.level === 3);
+    const level4 = cards.filter(c => c.level === 4);
 
     container.innerHTML = `
-        <div style="margin-bottom: 2rem;">
-            <h3 style="color: var(--primary); margin-bottom: 1rem;">
-                <i class="fas fa-brain"></i> Main Topics (${level0.length})
-            </h3>
-            ${level0.map((card, idx) => renderStudyCard(card, idx, 'primary')).join('')}
-        </div>
+        ${level0.length > 0 ? `
+            <div style="margin-bottom: 2rem;">
+                <h3 style="color: #1db954; margin-bottom: 1rem;">
+                    <i class="fas fa-crown"></i> Overview (${level0.length})
+                </h3>
+                ${level0.map((card, idx) => renderStudyCard(card, idx, 'primary')).join('')}
+            </div>
+        ` : ''}
 
         ${level1.length > 0 ? `
             <div style="margin-bottom: 2rem;">
-                <h3 style="color: var(--secondary); margin-bottom: 1rem;">
-                    <i class="fas fa-book"></i> Subtopics (${level1.length})
+                <h3 style="color: var(--primary); margin-bottom: 1rem;">
+                    <i class="fas fa-brain"></i> Main Topics (${level1.length})
                 </h3>
                 ${level1.map((card, idx) => renderStudyCard(card, idx, 'secondary')).join('')}
             </div>
@@ -278,10 +282,28 @@ function renderStudyCardsList() {
 
         ${level2.length > 0 ? `
             <div style="margin-bottom: 2rem;">
-                <h3 style="color: var(--text-secondary); margin-bottom: 1rem;">
-                    <i class="fas fa-list"></i> Detailed Concepts (${level2.length})
+                <h3 style="color: var(--secondary); margin-bottom: 1rem;">
+                    <i class="fas fa-book"></i> Subtopics (${level2.length})
                 </h3>
                 ${level2.map((card, idx) => renderStudyCard(card, idx, 'tertiary')).join('')}
+            </div>
+        ` : ''}
+
+        ${level3.length > 0 ? `
+            <div style="margin-bottom: 2rem;">
+                <h3 style="color: var(--text-secondary); margin-bottom: 1rem;">
+                    <i class="fas fa-list"></i> Detailed Concepts (${level3.length})
+                </h3>
+                ${level3.map((card, idx) => renderStudyCard(card, idx, 'quaternary')).join('')}
+            </div>
+        ` : ''}
+
+        ${level4.length > 0 ? `
+            <div style="margin-bottom: 2rem;">
+                <h3 style="color: #6c757d; margin-bottom: 1rem;">
+                    <i class="fas fa-circle-notch"></i> Specific Details (${level4.length})
+                </h3>
+                ${level4.map((card, idx) => renderStudyCard(card, idx, 'quinary')).join('')}
             </div>
         ` : ''}
     `;
@@ -289,9 +311,11 @@ function renderStudyCardsList() {
 
 function renderStudyCard(card, index, category) {
     const colors = {
-        primary: 'var(--primary)',
-        secondary: '#9d4edd',
-        tertiary: 'var(--text-secondary)'
+        primary: '#1db954',
+        secondary: 'var(--primary)',
+        tertiary: '#9d4edd',
+        quaternary: 'var(--text-secondary)',
+        quinary: '#6c757d'
     };
 
     return `

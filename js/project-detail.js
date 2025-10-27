@@ -1133,18 +1133,30 @@ function renderMindMap() {
     let mouseX = width / 2;
     let mouseY = height / 2;
 
+    // Helper to calculate node width
+    const calculateNodeWidth = (name) => {
+        const textLength = name.length;
+        return Math.max(140, textLength * 8.5 + 50);
+    };
+
     // Build nodes and links for force simulation
     function buildForceData(cards) {
-        const nodes = cards.map((card, index) => ({
-            id: index,
-            name: card.topic || card.term || card.name || card.title || `Card ${index + 1}`,
-            definition: card.content || card.definition || card.description || '',
-            level: card.level || 0,
-            color: card.color || '#667eea',
-            parentIndex: card.parentIndex,
-            x: width / 2 + (Math.random() - 0.5) * 200,
-            y: height / 2 + (Math.random() - 0.5) * 200
-        }));
+        const nodes = cards.map((card, index) => {
+            const name = card.topic || card.term || card.name || card.title || `Card ${index + 1}`;
+            const nodeWidth = calculateNodeWidth(name);
+            return {
+                id: index,
+                name: name,
+                definition: card.content || card.definition || card.description || '',
+                level: card.level || 0,
+                color: card.color || '#667eea',
+                parentIndex: card.parentIndex,
+                width: nodeWidth,
+                radius: nodeWidth / 2 + 20, // Half width + padding
+                x: width / 2 + (Math.random() - 0.5) * 300,
+                y: height / 2 + (Math.random() - 0.5) * 300
+            };
+        });
 
         const links = [];
         cards.forEach((card, index) => {
@@ -1215,28 +1227,39 @@ function renderMindMap() {
     const simulation = d3.forceSimulation(nodes)
         .force('link', d3.forceLink(links)
             .id(d => d.id)
-            .distance(150)
+            .distance(d => {
+                // Dynamic distance based on source and target node widths
+                const sourceRadius = d.source.radius || 80;
+                const targetRadius = d.target.radius || 80;
+                return sourceRadius + targetRadius + 80; // Sum of radii + extra spacing
+            })
             .strength(0.3))
         .force('charge', d3.forceManyBody()
-            .strength(-800)
-            .distanceMax(400))
+            .strength(-1200)
+            .distanceMax(500))
         .force('collision', d3.forceCollide()
-            .radius(80)
-            .strength(0.7))
+            .radius(d => d.radius || 80)
+            .strength(0.9)
+            .iterations(3))
         .force('center', d3.forceCenter(width / 2, height / 2)
             .strength(0.05))
         .force('mouse', mouseForce)
         .alphaDecay(0.02)
         .velocityDecay(0.3);
 
-    // Draw links (springy connections)
+    // Draw links (springy connections with gradient)
     const linkElements = container.selectAll('.mind-map-link')
         .data(links)
         .enter().append('line')
         .attr('class', 'mind-map-link')
-        .attr('stroke', '#3c4652')
-        .attr('stroke-width', 3)
-        .attr('stroke-opacity', 0.6);
+        .attr('stroke', d => {
+            // Use target node's color for the link
+            return d.target.color || '#667eea';
+        })
+        .attr('stroke-width', 2.5)
+        .attr('stroke-opacity', 0.4)
+        .style('stroke-linecap', 'round')
+        .style('transition', 'all 0.3s ease');
 
     // Draw nodes
     const nodeGroups = container.selectAll('.mind-map-node')
@@ -1249,11 +1272,8 @@ function renderMindMap() {
             .on('drag', dragged)
             .on('end', dragEnded));
 
-    // Calculate rectangle dimensions based on text length
-    const getRectWidth = (d) => {
-        const textLength = d.name.length;
-        return Math.max(140, textLength * 8.5 + 50);
-    };
+    // Rectangle dimensions
+    const getRectWidth = (d) => d.width; // Use pre-calculated width
     const rectHeight = 56;
     const accentWidth = 6;
 
@@ -1263,32 +1283,38 @@ function renderMindMap() {
         .attr('y', -rectHeight / 2)
         .attr('width', d => getRectWidth(d))
         .attr('height', rectHeight)
-        .attr('rx', 8)
-        .attr('ry', 8)
-        .attr('fill', '#222831')
-        .attr('stroke', '#3c4652')
-        .attr('stroke-width', 1)
-        .style('filter', 'drop-shadow(0 4px 8px rgba(0,0,0,0.4))')
-        .style('cursor', 'grab');
+        .attr('rx', 12)
+        .attr('ry', 12)
+        .attr('fill', '#1e2329')
+        .attr('stroke', d => d.color || '#667eea')
+        .attr('stroke-width', 1.5)
+        .attr('stroke-opacity', 0.3)
+        .style('filter', 'drop-shadow(0 6px 16px rgba(0,0,0,0.5))')
+        .style('cursor', 'grab')
+        .style('transition', 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)');
 
-    // Colored accent bar on the left
+    // Colored accent bar on the left (gradient effect)
     nodeGroups.append('rect')
         .attr('x', d => -getRectWidth(d) / 2)
         .attr('y', -rectHeight / 2)
         .attr('width', accentWidth)
         .attr('height', rectHeight)
-        .attr('rx', 8)
-        .attr('ry', 8)
+        .attr('rx', 12)
+        .attr('ry', 12)
         .attr('fill', d => d.color || '#667eea')
+        .attr('opacity', 0.9)
         .style('cursor', 'grab')
+        .style('transition', 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)')
         .attr('pointer-events', 'none');
 
-    // Small color dot indicator in top right
+    // Small color dot indicator in top right with glow
     nodeGroups.append('circle')
-        .attr('cx', d => getRectWidth(d) / 2 - 12)
-        .attr('cy', -rectHeight / 2 + 12)
-        .attr('r', 4)
+        .attr('cx', d => getRectWidth(d) / 2 - 14)
+        .attr('cy', -rectHeight / 2 + 14)
+        .attr('r', 5)
         .attr('fill', d => d.color || '#667eea')
+        .style('filter', 'drop-shadow(0 0 6px ' + ((d) => d.color || '#667eea') + ')')
+        .attr('opacity', 0.8)
         .attr('pointer-events', 'none');
 
     // Name label inside rectangle
@@ -1313,17 +1339,25 @@ function renderMindMap() {
         .attr('font-weight', '500')
         .attr('pointer-events', 'none');
 
-    // Hover and click effects
+    // Hover and click effects with smooth animations
     nodeGroups.on('mouseenter', function(event, d) {
+        const nodeColor = d.color || '#667eea';
+
         d3.select(this).selectAll('rect').filter((d, i) => i === 0)
-            .transition().duration(200)
-            .attr('stroke', '#1db954')
-            .attr('stroke-width', 2)
-            .style('filter', 'drop-shadow(0 6px 12px rgba(0,0,0,0.6))');
+            .transition()
+            .duration(300)
+            .ease(d3.easeCubicOut)
+            .attr('stroke', nodeColor)
+            .attr('stroke-width', 2.5)
+            .attr('stroke-opacity', 0.8)
+            .style('filter', 'drop-shadow(0 8px 24px rgba(0,0,0,0.7))');
 
         d3.select(this).selectAll('rect').filter((d, i) => i === 1)
-            .transition().duration(200)
-            .attr('width', accentWidth + 2);
+            .transition()
+            .duration(300)
+            .ease(d3.easeCubicOut)
+            .attr('width', accentWidth + 3)
+            .attr('opacity', 1);
 
         if (tooltip) {
             tooltip.querySelector('h4').textContent = d.name;
@@ -1339,15 +1373,23 @@ function renderMindMap() {
         }
     })
     .on('mouseleave', function(event, d) {
+        const nodeColor = d.color || '#667eea';
+
         d3.select(this).selectAll('rect').filter((d, i) => i === 0)
-            .transition().duration(200)
-            .attr('stroke', '#3c4652')
-            .attr('stroke-width', 1)
-            .style('filter', 'drop-shadow(0 4px 8px rgba(0,0,0,0.4))');
+            .transition()
+            .duration(300)
+            .ease(d3.easeCubicOut)
+            .attr('stroke', nodeColor)
+            .attr('stroke-width', 1.5)
+            .attr('stroke-opacity', 0.3)
+            .style('filter', 'drop-shadow(0 6px 16px rgba(0,0,0,0.5))');
 
         d3.select(this).selectAll('rect').filter((d, i) => i === 1)
-            .transition().duration(200)
-            .attr('width', accentWidth);
+            .transition()
+            .duration(300)
+            .ease(d3.easeCubicOut)
+            .attr('width', accentWidth)
+            .attr('opacity', 0.9);
 
         if (tooltip) {
             tooltip.style.opacity = '0';

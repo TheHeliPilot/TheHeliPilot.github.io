@@ -15,7 +15,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { userId, isPro, text, model } = req.body;
+    const { userId, isPro, text, model, language, languageInstruction } = req.body;
 
     if (!userId || !text) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -29,56 +29,73 @@ export default async function handler(req, res) {
 
     // Determine card count dynamically based on content complexity
     const wordCount = text.split(/\s+/).length;
-    // Generate comprehensive study cards - more detailed coverage
-    const cardCount = Math.min(Math.ceil(wordCount / 80), 100); // ~1 card per 80 words, max 100
+    // Generate MORE study cards with deeper structure - better mindmap visualization
+    const cardCount = Math.min(Math.ceil(wordCount / 40), 150); // ~1 card per 40 words, max 150 (increased from 80/100)
+
+    const languageNote = languageInstruction || '';
 
     const prompt = `Analyze the study material below and create ${cardCount} hierarchical study cards for a mind map visualization.
 
+${languageNote ? `IMPORTANT: ${languageNote}\n` : ''}
 Return ONLY a JSON array with this exact structure:
 [
   {
-    "topic": "Main Topic Name",
-    "content": "Detailed explanation of the topic (2-4 sentences)",
+    "topic": "Overview",
+    "content": "Brief overview of the entire topic (1-2 sentences)",
     "level": 0,
     "parentIndex": null,
     "category": "primary"
   },
   {
-    "topic": "Subtopic Name",
-    "content": "Explanation of subtopic",
+    "topic": "Main Topic Name",
+    "content": "Detailed explanation (2-3 sentences)",
     "level": 1,
     "parentIndex": 0,
     "category": "secondary"
+  },
+  {
+    "topic": "Subtopic Name",
+    "content": "Explanation of subtopic",
+    "level": 2,
+    "parentIndex": 1,
+    "category": "tertiary"
   }
 ]
 
 Rules:
-- Level 0 = main topics (3-5 cards, parentIndex: null, category: "primary")
-- Level 1 = major subtopics (parentIndex: index of level 0 parent, category: "secondary")
-- Level 2 = detailed concepts (parentIndex: index of level 1 parent, category: "tertiary")
-- Create a logical tree structure with clear parent-child relationships
+- FIRST CARD MUST BE: An "Overview" card at level 0 with parentIndex null - this is the root of the entire mind map
+- Level 1 = main topics (3-5 cards, parentIndex: 0 (the Overview), category: "secondary")
+- Level 2 = major subtopics (3-6 cards per level 1 parent, parentIndex: index of level 1 parent, category: "tertiary")
+- Level 3 = detailed concepts (2-4 cards per level 2 parent, parentIndex: index of level 2 parent, category: "tertiary")
+- Level 4 = specific details (1-2 cards per level 3 parent, parentIndex: index of level 3 parent, category: "tertiary")
+- Create a DEEP tree structure with 4-5 levels for rich visualization
 - Each card should have a clear, concise topic (3-8 words)
-- Content should be educational and detailed (2-4 sentences)
+- Content should be educational and detailed (2-3 sentences)
 - Ensure parentIndex correctly references the index of parent cards
+- Make sure to create a balanced tree - each branch should have children
 - Return ONLY the JSON array, no markdown formatting
-
+${languageNote ? `- ALL content (topic, content fields) must be in the specified language\n` : ''}
 Study Material:
 ${text}`;
 
     // GPT-5 Nano only supports default temperature (1), others can use 0.7
+    const systemPrompt = languageNote
+      ? `You are an educational content creator that structures information hierarchically for mind mapping. ${languageNote} Always return valid JSON arrays only with all text content in the specified language.`
+      : 'You are an educational content creator that structures information hierarchically for mind mapping. Always return valid JSON arrays only.';
+
     const requestBody = {
       model: selectedModel,
       messages: [
         {
           role: 'system',
-          content: 'You are an educational content creator that structures information hierarchically for mind mapping. Always return valid JSON arrays only.'
+          content: systemPrompt
         },
         {
           role: 'user',
           content: prompt
         }
       ],
-      max_completion_tokens: 4000
+      max_completion_tokens: 8000  // Increased from 4000 to accommodate more cards
     };
 
     // Only add temperature for non-5-nano models
