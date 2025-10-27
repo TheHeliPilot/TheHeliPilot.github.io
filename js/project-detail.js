@@ -1195,6 +1195,22 @@ function renderMindMap() {
         );
     });
 
+    // Custom force to attract nodes towards mouse
+    function mouseForce(alpha) {
+        const strength = 0.15 * alpha;
+        for (let i = 0; i < nodes.length; i++) {
+            const node = nodes[i];
+            const dx = mouseX - node.x;
+            const dy = mouseY - node.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance > 0 && distance < 400) {
+                const force = strength / distance;
+                node.vx += dx * force;
+                node.vy += dy * force;
+            }
+        }
+    }
+
     // Create force simulation with springy physics
     const simulation = d3.forceSimulation(nodes)
         .force('link', d3.forceLink(links)
@@ -1209,20 +1225,7 @@ function renderMindMap() {
             .strength(0.7))
         .force('center', d3.forceCenter(width / 2, height / 2)
             .strength(0.05))
-        .force('mouse', d => {
-            // Custom force to attract nodes towards mouse
-            const strength = 0.1;
-            nodes.forEach(node => {
-                const dx = mouseX - node.x;
-                const dy = mouseY - node.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                if (distance > 0) {
-                    const factor = strength / distance;
-                    node.vx += dx * factor;
-                    node.vy += dy * factor;
-                }
-            });
-        })
+        .force('mouse', mouseForce)
         .alphaDecay(0.02)
         .velocityDecay(0.3);
 

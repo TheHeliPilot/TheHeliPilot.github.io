@@ -2383,18 +2383,35 @@ window.selectPublicAnswer = async function(selectedIdx) {
     feedback.innerHTML = '<div class="spinner" style="width: 20px; height: 20px;"></div>';
 
     try {
-        // Validate answer on server
-        const response = await fetch('https://quizapp2-eight.vercel.app/api/validate-answer', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                projectId: currentPublicQuiz.projectId,
-                cardId: card.id,
-                selectedAnswer: selectedIdx
-            })
-        });
+        let result;
 
-        const result = await response.json();
+        // Try server-side validation first
+        try {
+            const response = await fetch('https://quizapp2-eight.vercel.app/api/validate-answer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    projectId: currentPublicQuiz.projectId,
+                    cardId: card.id,
+                    selectedAnswer: selectedIdx
+                })
+            });
+
+            if (!response.ok) throw new Error('API not available');
+            result = await response.json();
+        } catch (apiError) {
+            // Fallback to client-side validation (for local development)
+            console.warn('API unavailable, using client-side validation:', apiError);
+            const cardSnapshot = await get(ref(window.db, `publicProjects/${currentPublicQuiz.projectId}/cards/${card.id}`));
+            const fullCard = cardSnapshot.val();
+
+            result = {
+                isCorrect: parseInt(selectedIdx) === parseInt(fullCard.correctAnswer),
+                correctAnswer: fullCard.correctAnswer,
+                explanation: fullCard.explanation || ''
+            };
+        }
+
         const isCorrect = result.isCorrect;
 
         // Store answer
