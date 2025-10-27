@@ -1414,6 +1414,39 @@ function shuffleArray(array) {
 }
 
 // ============================================
+// MOBILE MENU
+// ============================================
+
+function initMobileMenu() {
+    const menuToggle = document.getElementById('menuToggle');
+    const sidebar = document.querySelector('.sidebar');
+    const backdrop = document.getElementById('sidebarBackdrop');
+    const navLinks = document.querySelectorAll('.nav-link');
+
+    // Toggle sidebar
+    menuToggle.addEventListener('click', () => {
+        sidebar.classList.add('open');
+        backdrop.classList.add('active');
+    });
+
+    // Close sidebar when backdrop is clicked
+    backdrop.addEventListener('click', () => {
+        sidebar.classList.remove('open');
+        backdrop.classList.remove('active');
+    });
+
+    // Close sidebar when nav link is clicked (mobile)
+    navLinks.forEach(link => {
+        link.addEventListener('click', () => {
+            if (window.innerWidth <= 768) {
+                sidebar.classList.remove('open');
+                backdrop.classList.remove('active');
+            }
+        });
+    });
+}
+
+// ============================================
 // DARK MODE
 // ============================================
 
@@ -1440,5 +1473,6 @@ document.addEventListener('DOMContentLoaded', () => {
         initAccount();
         initModals();
         initDarkMode();
+        initMobileMenu();
     }, 100);
 });
