@@ -327,11 +327,11 @@
 
                 <!-- Study Cards Tab -->
                 <div id="studyCardsTab" class="project-tab-content">
-                    <div class="section">
-                        <p style="color: var(--text-secondary); margin-bottom: var(--spacing-lg);">
-                            <i class="fas fa-info-circle"></i>
-                            Study cards are generated from your notes and linked to the mind map. You can edit names and descriptions, but cannot add or delete cards directly.
-                        </p>
+                    <div class="page-header">
+                        <button id="addStudyCardBtn" class="btn btn-primary">
+                            <i class="fas fa-plus"></i>
+                            Add Study Card
+                        </button>
                     </div>
                     <div id="studyCardsList" class="cards-grid">
                         <div class="empty-state">
@@ -1305,6 +1305,142 @@
                 <button class="btn btn-secondary" data-modal="studyMaterialsModal">Cancel</button>
                 <button id="generateStudyMaterialsBtn" class="btn btn-primary">
                     <i class="fas fa-magic"></i> Generate All
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Test Card Modal -->
+    <div id="addTestCardModal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3><i class="fas fa-layer-group"></i> Add Test Card</h3>
+                <button class="modal-close" data-modal="addTestCardModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Question</label>
+                    <textarea id="testCardQuestion" class="text-input" rows="3" placeholder="Enter your question..." required></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Answer Options</label>
+                    <div class="answer-options">
+                        <div class="answer-option">
+                            <input type="radio" name="testCardCorrect" value="0" checked>
+                            <input type="text" id="testCardOption0" class="text-input" placeholder="Option A" required>
+                            <span class="correct-label">Correct</span>
+                        </div>
+                        <div class="answer-option">
+                            <input type="radio" name="testCardCorrect" value="1">
+                            <input type="text" id="testCardOption1" class="text-input" placeholder="Option B" required>
+                            <span class="correct-label">Correct</span>
+                        </div>
+                        <div class="answer-option">
+                            <input type="radio" name="testCardCorrect" value="2">
+                            <input type="text" id="testCardOption2" class="text-input" placeholder="Option C" required>
+                            <span class="correct-label">Correct</span>
+                        </div>
+                        <div class="answer-option">
+                            <input type="radio" name="testCardCorrect" value="3">
+                            <input type="text" id="testCardOption3" class="text-input" placeholder="Option D" required>
+                            <span class="correct-label">Correct</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Explanation (Optional)</label>
+                    <textarea id="testCardExplanation" class="text-input" rows="2" placeholder="Explain why this answer is correct..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Difficulty</label>
+                    <select id="testCardDifficulty" class="select-input">
+                        <option value="easy">Easy</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="hard">Hard</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-modal="addTestCardModal">Cancel</button>
+                <button id="saveTestCardBtn" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Save Test Card
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Study Card Modal -->
+    <div id="addStudyCardModal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-brain"></i> Add Study Card</h3>
+                <button class="modal-close" data-modal="addStudyCardModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Title</label>
+                    <input type="text" id="studyCardTitle" class="text-input" placeholder="Card title..." required>
+                </div>
+
+                <div class="form-group">
+                    <label>Content / Description</label>
+                    <textarea id="studyCardContent" class="text-input" rows="4" placeholder="Card content..." required></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Parent Card</label>
+                    <select id="studyCardParent" class="select-input">
+                        <option value="">No Parent (Root Level)</option>
+                    </select>
+                    <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: var(--spacing-xs);">
+                        <i class="fas fa-info-circle"></i> Select a parent to connect this card in the mind map hierarchy
+                    </p>
+                </div>
+
+                <div class="form-group">
+                    <label>Category</label>
+                    <select id="studyCardCategory" class="select-input">
+                        <option value="primary">Primary</option>
+                        <option value="secondary">Secondary</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Color</label>
+                    <div class="color-picker-grid" style="display: grid; grid-template-columns: repeat(8, 1fr); gap: var(--spacing-sm);">
+                        <div class="color-picker-option selected" style="background: #667eea;" data-color="#667eea"></div>
+                        <div class="color-picker-option" style="background: #764ba2;" data-color="#764ba2"></div>
+                        <div class="color-picker-option" style="background: #f093fb;" data-color="#f093fb"></div>
+                        <div class="color-picker-option" style="background: #f5576c;" data-color="#f5576c"></div>
+                        <div class="color-picker-option" style="background: #4facfe;" data-color="#4facfe"></div>
+                        <div class="color-picker-option" style="background: #00f2fe;" data-color="#00f2fe"></div>
+                        <div class="color-picker-option" style="background: #43e97b;" data-color="#43e97b"></div>
+                        <div class="color-picker-option" style="background: #38f9d7;" data-color="#38f9d7"></div>
+                        <div class="color-picker-option" style="background: #fa709a;" data-color="#fa709a"></div>
+                        <div class="color-picker-option" style="background: #fee140;" data-color="#fee140"></div>
+                        <div class="color-picker-option" style="background: #30cfd0;" data-color="#30cfd0"></div>
+                        <div class="color-picker-option" style="background: #330867;" data-color="#330867"></div>
+                        <div class="color-picker-option" style="background: #ff6b6b;" data-color="#ff6b6b"></div>
+                        <div class="color-picker-option" style="background: #ee5a6f;" data-color="#ee5a6f"></div>
+                        <div class="color-picker-option" style="background: #ffd93d;" data-color="#ffd93d"></div>
+                        <div class="color-picker-option" style="background: #6bcf7f;" data-color="#6bcf7f"></div>
+                    </div>
+                    <input type="hidden" id="studyCardColor" value="#667eea">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-modal="addStudyCardModal">Cancel</button>
+                <button id="saveStudyCardBtn" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Save Study Card
                 </button>
             </div>
         </div>

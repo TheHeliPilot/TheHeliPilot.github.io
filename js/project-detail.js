@@ -66,10 +66,37 @@ function setupProjectDetailEventListeners() {
     // Add test card button
     const addTestCardBtn = document.getElementById('addTestCardBtn');
     if (addTestCardBtn) {
-        addTestCardBtn.addEventListener('click', () => {
-            showNotification('Add test card feature coming soon!', 'info');
-        });
+        addTestCardBtn.addEventListener('click', openAddTestCardModal);
     }
+
+    // Add study card button
+    const addStudyCardBtn = document.getElementById('addStudyCardBtn');
+    if (addStudyCardBtn) {
+        addStudyCardBtn.addEventListener('click', openAddStudyCardModal);
+    }
+
+    // Save test card button
+    const saveTestCardBtn = document.getElementById('saveTestCardBtn');
+    if (saveTestCardBtn) {
+        saveTestCardBtn.addEventListener('click', saveNewTestCard);
+    }
+
+    // Save study card button
+    const saveStudyCardBtn = document.getElementById('saveStudyCardBtn');
+    if (saveStudyCardBtn) {
+        saveStudyCardBtn.addEventListener('click', saveNewStudyCard);
+    }
+
+    // Color picker in add study card modal
+    document.querySelectorAll('#addStudyCardModal .color-picker-option').forEach(option => {
+        option.addEventListener('click', function() {
+            document.querySelectorAll('#addStudyCardModal .color-picker-option').forEach(opt => {
+                opt.classList.remove('selected');
+            });
+            this.classList.add('selected');
+            document.getElementById('studyCardColor').value = this.dataset.color;
+        });
+    });
 
     // Start test from project
     const startTestBtn = document.getElementById('startProjectTestBtn');
@@ -156,9 +183,188 @@ function switchProjectTab(tabName) {
         activeContent.classList.add('active');
     }
 
-    // Load mind map if switching to that tab
+    // Refresh mind map whenever switching to it
     if (tabName === 'mindMap') {
-        renderMindMap();
+        // Use setTimeout to ensure the tab is visible before rendering
+        setTimeout(() => {
+            renderMindMap();
+        }, 100);
+    }
+}
+
+// Open add test card modal
+function openAddTestCardModal() {
+    // Clear form
+    document.getElementById('testCardQuestion').value = '';
+    document.getElementById('testCardOption0').value = '';
+    document.getElementById('testCardOption1').value = '';
+    document.getElementById('testCardOption2').value = '';
+    document.getElementById('testCardOption3').value = '';
+    document.getElementById('testCardExplanation').value = '';
+    document.getElementById('testCardDifficulty').value = 'medium';
+    document.querySelector('input[name="testCardCorrect"][value="0"]').checked = true;
+
+    // Show modal
+    document.getElementById('addTestCardModal').classList.remove('hidden');
+}
+
+// Open add study card modal
+function openAddStudyCardModal() {
+    if (!currentProject || !currentProject.studyCards) return;
+
+    // Clear form
+    document.getElementById('studyCardTitle').value = '';
+    document.getElementById('studyCardContent').value = '';
+    document.getElementById('studyCardCategory').value = 'primary';
+    document.getElementById('studyCardColor').value = '#667eea';
+
+    // Reset color selection
+    document.querySelectorAll('#addStudyCardModal .color-picker-option').forEach(opt => {
+        opt.classList.remove('selected');
+    });
+    document.querySelector('#addStudyCardModal .color-picker-option[data-color="#667eea"]').classList.add('selected');
+
+    // Populate parent dropdown
+    const parentSelect = document.getElementById('studyCardParent');
+    parentSelect.innerHTML = '<option value="">No Parent (Root Level)</option>';
+
+    currentProject.studyCards.forEach((card, index) => {
+        const option = document.createElement('option');
+        option.value = index;
+        option.textContent = card.topic || card.term || `Card ${index + 1}`;
+        parentSelect.appendChild(option);
+    });
+
+    // Show modal
+    document.getElementById('addStudyCardModal').classList.remove('hidden');
+}
+
+// Save new test card
+async function saveNewTestCard() {
+    try {
+        const question = document.getElementById('testCardQuestion').value.trim();
+        const options = [
+            document.getElementById('testCardOption0').value.trim(),
+            document.getElementById('testCardOption1').value.trim(),
+            document.getElementById('testCardOption2').value.trim(),
+            document.getElementById('testCardOption3').value.trim()
+        ];
+        const correctAnswer = parseInt(document.querySelector('input[name="testCardCorrect"]:checked').value);
+        const explanation = document.getElementById('testCardExplanation').value.trim();
+        const difficulty = document.getElementById('testCardDifficulty').value;
+
+        // Validation
+        if (!question) {
+            showNotification('Please enter a question', 'error');
+            return;
+        }
+        if (options.some(opt => !opt)) {
+            showNotification('Please fill in all answer options', 'error');
+            return;
+        }
+
+        const user = window.auth.currentUser;
+        const { ref, push } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
+
+        const cardData = {
+            projectId: currentProject.id,
+            question: question,
+            options: options,
+            correctAnswer: correctAnswer,
+            explanation: explanation,
+            difficulty: difficulty,
+            mastered: false,
+            locked: false,
+            createdAt: Date.now()
+        };
+
+        const cardsRef = ref(window.db, `users/${user.uid}/cards`);
+        await push(cardsRef, cardData);
+
+        // Reload cards
+        if (window.loadCards) {
+            await window.loadCards();
+        }
+        loadTestCards(currentProject.id);
+
+        // Close modal
+        document.getElementById('addTestCardModal').classList.add('hidden');
+        showNotification('Test card added successfully', 'success');
+    } catch (error) {
+        console.error('Error saving test card:', error);
+        showNotification('Failed to save test card', 'error');
+    }
+}
+
+// Save new study card
+async function saveNewStudyCard() {
+    try {
+        const title = document.getElementById('studyCardTitle').value.trim();
+        const content = document.getElementById('studyCardContent').value.trim();
+        const parentValue = document.getElementById('studyCardParent').value;
+        const category = document.getElementById('studyCardCategory').value;
+        const color = document.getElementById('studyCardColor').value;
+
+        // Validation
+        if (!title) {
+            showNotification('Please enter a title', 'error');
+            return;
+        }
+        if (!content) {
+            showNotification('Please enter content', 'error');
+            return;
+        }
+
+        const user = window.auth.currentUser;
+        const { ref, update } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
+
+        // Create new study card
+        const newCard = {
+            topic: title,
+            content: content,
+            category: category,
+            color: color,
+            parentIndex: parentValue === '' ? null : parseInt(parentValue),
+            level: parentValue === '' ? 0 : (currentProject.studyCards[parseInt(parentValue)].level + 1)
+        };
+
+        // Add to existing study cards
+        if (!currentProject.studyCards) {
+            currentProject.studyCards = [];
+        }
+        currentProject.studyCards.push(newCard);
+
+        // Save to Firebase
+        const projectRef = ref(window.db, `users/${user.uid}/projects/${currentProject.id}`);
+        await update(projectRef, {
+            studyCards: currentProject.studyCards,
+            studyCardsCount: currentProject.studyCards.length,
+            updatedAt: new Date().toISOString()
+        });
+
+        // Update window.projects
+        if (window.projects) {
+            const projectIndex = window.projects.findIndex(p => p.id === currentProject.id);
+            if (projectIndex !== -1) {
+                window.projects[projectIndex].studyCards = currentProject.studyCards;
+                window.projects[projectIndex].studyCardsCount = currentProject.studyCards.length;
+            }
+        }
+
+        // Reload display
+        loadStudyCards(currentProject.id);
+
+        // Refresh mind map if visible
+        if (document.getElementById('mindMapTab').classList.contains('active')) {
+            renderMindMap();
+        }
+
+        // Close modal
+        document.getElementById('addStudyCardModal').classList.add('hidden');
+        showNotification('Study card added successfully', 'success');
+    } catch (error) {
+        console.error('Error saving study card:', error);
+        showNotification('Failed to save study card', 'error');
     }
 }
 
@@ -545,28 +751,290 @@ function loadStudyCards(projectId) {
             return;
         }
 
-        studyCardsList.innerHTML = studyCards.map((card, index) => `
-            <div class="card-item study-card" data-card-index="${index}">
-                <div style="display: flex; justify-content: space-between; align-items: start;">
-                    <div style="flex: 1;">
-                        <div class="card-question">${escapeHtml(card.topic || card.term || card.name || card.title || 'Untitled')}</div>
-                        <div style="margin-top: var(--spacing-md); color: var(--text-secondary);">
-                            ${escapeHtml(card.content || card.definition || card.description || '')}
+        studyCardsList.innerHTML = studyCards.map((card, index) => {
+            const cardColor = card.color || '#667eea';
+            return `
+            <div class="card-item study-card" data-card-index="${index}" style="border-left-color: ${cardColor};">
+                <div class="study-card-color-indicator" style="background: ${cardColor};" data-card-index="${index}"></div>
+
+                <!-- Display Mode -->
+                <div class="study-card-display">
+                    <div class="card-question">${escapeHtml(card.topic || card.term || card.name || card.title || 'Untitled')}</div>
+                    <div style="color: var(--text-secondary); font-size: 0.938rem; line-height: 1.5;">
+                        ${escapeHtml(card.content || card.definition || card.description || '')}
+                    </div>
+                    ${card.level !== undefined ? `
+                        <div style="font-size: 0.875rem; color: var(--text-muted);">
+                            <i class="fas fa-layer-group"></i> Level ${card.level}
+                            ${card.category ? ` • <i class="fas fa-tag"></i> ${card.category}` : ''}
                         </div>
-                        ${card.level !== undefined ? `
-                            <div style="margin-top: var(--spacing-sm); font-size: 0.875rem; color: var(--text-muted);">
-                                <i class="fas fa-layer-group"></i> Level ${card.level}
-                                ${card.category ? ` • <i class="fas fa-tag"></i> ${card.category}` : ''}
-                            </div>
-                        ` : ''}
+                    ` : ''}
+                    <div style="font-size: 0.75rem; color: var(--text-muted); font-style: italic; opacity: 0.7;">
+                        Click to edit
+                    </div>
+                </div>
+
+                <!-- Edit Mode -->
+                <div class="study-card-edit-form">
+                    <div class="form-group" style="margin-bottom: var(--spacing-md);">
+                        <label>Title</label>
+                        <input type="text" class="text-input study-card-title" value="${escapeHtml(card.topic || card.term || card.name || card.title || '')}" />
+                    </div>
+                    <div class="form-group" style="margin-bottom: var(--spacing-md);">
+                        <label>Description</label>
+                        <textarea class="text-input study-card-description" rows="3">${escapeHtml(card.content || card.definition || card.description || '')}</textarea>
+                    </div>
+                    <div style="display: flex; gap: var(--spacing-sm);">
+                        <button class="btn btn-primary btn-sm save-study-card" data-card-index="${index}">
+                            <i class="fas fa-save"></i> Save
+                        </button>
+                        <button class="btn btn-secondary btn-sm cancel-study-card-edit">
+                            <i class="fas fa-times"></i> Cancel
+                        </button>
                     </div>
                 </div>
             </div>
-        `).join('');
+            `;
+        }).join('');
+
+        // Add click handlers for study cards
+        document.querySelectorAll('.study-card').forEach(cardEl => {
+            cardEl.addEventListener('click', (e) => {
+                // Don't trigger edit mode if clicking color indicator or already editing
+                if (e.target.classList.contains('study-card-color-indicator') ||
+                    cardEl.classList.contains('editing') ||
+                    e.target.closest('.study-card-edit-form')) {
+                    return;
+                }
+                cardEl.classList.add('editing');
+            });
+        });
+
+        // Add click handlers for color indicators
+        document.querySelectorAll('.study-card-color-indicator').forEach(indicator => {
+            indicator.addEventListener('click', (e) => {
+                e.stopPropagation();
+                showColorPicker(e.target, parseInt(indicator.dataset.cardIndex));
+            });
+        });
+
+        // Add save handlers
+        document.querySelectorAll('.save-study-card').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const index = parseInt(btn.dataset.cardIndex);
+                await saveStudyCardEdit(index);
+            });
+        });
+
+        // Add cancel handlers
+        document.querySelectorAll('.cancel-study-card-edit').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const cardEl = btn.closest('.study-card');
+                cardEl.classList.remove('editing');
+            });
+        });
 
     } catch (error) {
         console.error('Error loading study cards:', error);
     }
+}
+
+// Save study card edit
+async function saveStudyCardEdit(cardIndex) {
+    try {
+        const cardEl = document.querySelector(`.study-card[data-card-index="${cardIndex}"]`);
+        const titleInput = cardEl.querySelector('.study-card-title');
+        const descInput = cardEl.querySelector('.study-card-description');
+
+        const newTitle = titleInput.value.trim();
+        const newDescription = descInput.value.trim();
+
+        if (!newTitle) {
+            showNotification('Title cannot be empty', 'error');
+            return;
+        }
+
+        // Update the study card in the project
+        if (currentProject.studyCards && currentProject.studyCards[cardIndex]) {
+            currentProject.studyCards[cardIndex].topic = newTitle;
+            currentProject.studyCards[cardIndex].content = newDescription;
+
+            // Save to Firebase
+            const { ref, update } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
+            const user = window.auth.currentUser;
+            const projectRef = ref(window.db, `users/${user.uid}/projects/${currentProject.id}`);
+            await update(projectRef, {
+                studyCards: currentProject.studyCards,
+                updatedAt: new Date().toISOString()
+            });
+
+            // Update display and exit edit mode
+            cardEl.classList.remove('editing');
+            loadStudyCards(currentProject.id);
+            showNotification('Study card updated', 'success');
+
+            // Refresh mind map if it's visible
+            if (document.getElementById('mindMapTab').classList.contains('active')) {
+                renderMindMap();
+            }
+        }
+    } catch (error) {
+        console.error('Error saving study card:', error);
+        showNotification('Failed to save study card', 'error');
+    }
+}
+
+// Show color picker for study card
+function showColorPicker(targetElement, cardIndex) {
+    // Remove any existing color picker
+    const existing = document.querySelector('.color-picker-modal');
+    if (existing) existing.remove();
+
+    // Create color picker
+    const colorPicker = document.createElement('div');
+    colorPicker.className = 'color-picker-modal active';
+
+    const colors = [
+        '#667eea', '#764ba2', '#f093fb', '#f5576c',
+        '#4facfe', '#00f2fe', '#43e97b', '#38f9d7',
+        '#fa709a', '#fee140', '#30cfd0', '#330867',
+        '#ff6b6b', '#ee5a6f', '#ffd93d', '#6bcf7f',
+        '#4a90e2', '#9013fe', '#50c878', '#ff6347'
+    ];
+
+    colorPicker.innerHTML = `
+        <div style="margin-bottom: var(--spacing-sm); font-weight: 600; color: var(--text-primary);">
+            Choose Color
+        </div>
+        <div class="color-picker-grid">
+            ${colors.map(color => `
+                <div class="color-picker-option" style="background: ${color};" data-color="${color}"></div>
+            `).join('')}
+        </div>
+        <button class="btn btn-secondary btn-sm" style="width: 100%;" onclick="this.closest('.color-picker-modal').remove()">
+            Cancel
+        </button>
+    `;
+
+    // Position the picker
+    const rect = targetElement.getBoundingClientRect();
+    colorPicker.style.position = 'fixed';
+    colorPicker.style.left = `${rect.left}px`;
+    colorPicker.style.top = `${rect.bottom + 8}px`;
+
+    document.body.appendChild(colorPicker);
+
+    // Add click handlers for color options
+    colorPicker.querySelectorAll('.color-picker-option').forEach(option => {
+        option.addEventListener('click', async () => {
+            const color = option.dataset.color;
+            await updateStudyCardColor(cardIndex, color);
+            colorPicker.remove();
+        });
+    });
+
+    // Close when clicking outside
+    setTimeout(() => {
+        document.addEventListener('click', function closeColorPicker(e) {
+            if (!colorPicker.contains(e.target) && e.target !== targetElement) {
+                colorPicker.remove();
+                document.removeEventListener('click', closeColorPicker);
+            }
+        });
+    }, 100);
+}
+
+// Update study card color
+async function updateStudyCardColor(cardIndex, color) {
+    try {
+        if (!currentProject.studyCards || !currentProject.studyCards[cardIndex]) return;
+
+        // Update color in study card
+        currentProject.studyCards[cardIndex].color = color;
+
+        // Save to Firebase
+        const { ref, update } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
+        const user = window.auth.currentUser;
+        const projectRef = ref(window.db, `users/${user.uid}/projects/${currentProject.id}`);
+        await update(projectRef, {
+            studyCards: currentProject.studyCards,
+            updatedAt: new Date().toISOString()
+        });
+
+        // Reload study cards display
+        loadStudyCards(currentProject.id);
+
+        // Refresh mind map if it's visible
+        if (document.getElementById('mindMapTab').classList.contains('active')) {
+            renderMindMap();
+        }
+
+        showNotification('Color updated', 'success');
+    } catch (error) {
+        console.error('Error updating color:', error);
+        showNotification('Failed to update color', 'error');
+    }
+}
+
+// Show color picker for mind map node
+function showMindMapColorPicker(event, nodeId) {
+    // Remove any existing color picker
+    const existing = document.querySelector('.color-picker-modal');
+    if (existing) existing.remove();
+
+    // Create color picker
+    const colorPicker = document.createElement('div');
+    colorPicker.className = 'color-picker-modal active';
+
+    const colors = [
+        '#667eea', '#764ba2', '#f093fb', '#f5576c',
+        '#4facfe', '#00f2fe', '#43e97b', '#38f9d7',
+        '#fa709a', '#fee140', '#30cfd0', '#330867',
+        '#ff6b6b', '#ee5a6f', '#ffd93d', '#6bcf7f',
+        '#4a90e2', '#9013fe', '#50c878', '#ff6347'
+    ];
+
+    colorPicker.innerHTML = `
+        <div style="margin-bottom: var(--spacing-sm); font-weight: 600; color: var(--text-primary);">
+            Choose Node Color
+        </div>
+        <div class="color-picker-grid">
+            ${colors.map(color => `
+                <div class="color-picker-option" style="background: ${color};" data-color="${color}"></div>
+            `).join('')}
+        </div>
+        <button class="btn btn-secondary btn-sm" style="width: 100%;" onclick="this.closest('.color-picker-modal').remove()">
+            Cancel
+        </button>
+    `;
+
+    // Position the picker near the click
+    colorPicker.style.position = 'fixed';
+    colorPicker.style.left = `${event.clientX + 10}px`;
+    colorPicker.style.top = `${event.clientY + 10}px`;
+
+    document.body.appendChild(colorPicker);
+
+    // Add click handlers for color options
+    colorPicker.querySelectorAll('.color-picker-option').forEach(option => {
+        option.addEventListener('click', async () => {
+            const color = option.dataset.color;
+            await updateStudyCardColor(nodeId, color);
+            colorPicker.remove();
+        });
+    });
+
+    // Close when clicking outside
+    setTimeout(() => {
+        document.addEventListener('click', function closeColorPicker(e) {
+            if (!colorPicker.contains(e.target)) {
+                colorPicker.remove();
+                document.removeEventListener('click', closeColorPicker);
+            }
+        });
+    }, 100);
 }
 
 // Render mind map
@@ -609,6 +1077,7 @@ function renderMindMap() {
                 name: card.topic || card.term || card.name || card.title || `Card ${index + 1}`,
                 definition: card.content || card.definition || card.description || '',
                 level: card.level || 0,
+                color: card.color || '#667eea',
                 children: []
             });
         });
@@ -679,25 +1148,8 @@ function renderMindMap() {
         );
     });
 
-    // Create gradients
+    // Create defs for potential filters/patterns (keeping for future use)
     const defs = svg.append('defs');
-    const gradients = [
-        { id: 'grad0', color1: '#667eea', color2: '#764ba2' },
-        { id: 'grad1', color1: '#f093fb', color2: '#f5576c' },
-        { id: 'grad2', color1: '#4facfe', color2: '#00f2fe' },
-        { id: 'grad3', color1: '#43e97b', color2: '#38f9d7' },
-        { id: 'grad4', color1: '#fa709a', color2: '#fee140' },
-        { id: 'grad5', color1: '#30cfd0', color2: '#330867' }
-    ];
-
-    gradients.forEach(grad => {
-        const gradient = defs.append('linearGradient')
-            .attr('id', grad.id)
-            .attr('x1', '0%').attr('y1', '0%')
-            .attr('x2', '100%').attr('y2', '100%');
-        gradient.append('stop').attr('offset', '0%').attr('stop-color', grad.color1);
-        gradient.append('stop').attr('offset', '100%').attr('stop-color', grad.color2);
-    });
 
     // Create tree layout
     const treeLayout = d3.tree()
@@ -709,76 +1161,104 @@ function renderMindMap() {
     treeLayout(root);
 
     // Draw links (tree branches)
-    const links = container.selectAll('.link')
+    const links = container.selectAll('.mind-map-link')
         .data(root.links())
         .enter().append('path')
-        .attr('class', 'link')
+        .attr('class', 'mind-map-link')
         .attr('d', d3.linkHorizontal()
             .x(d => d.y + 100)
             .y(d => d.x + 50))
         .attr('fill', 'none')
-        .attr('stroke', '#666')
-        .attr('stroke-width', 3)
-        .attr('stroke-opacity', 0.4);
+        .attr('stroke', '#3c4652')
+        .attr('stroke-width', 2)
+        .attr('stroke-opacity', 0.5);
 
     // Draw nodes
-    const nodes = container.selectAll('.node')
+    const nodes = container.selectAll('.mind-map-node')
         .data(root.descendants())
         .enter().append('g')
-        .attr('class', 'node')
-        .attr('transform', d => `translate(${d.y + 100},${d.x + 50})`);
+        .attr('class', 'mind-map-node')
+        .attr('transform', d => `translate(${d.y + 100},${d.x + 50})`)
+        .attr('data-node-id', d => d.data.id);
 
-    // Outer glow
-    nodes.append('circle')
-        .attr('r', d => 40 + Math.max(0, d.data.level) * 5)
-        .attr('fill', 'none')
-        .attr('stroke', d => `url(#grad${Math.max(0, d.data.level % gradients.length)})`)
-        .attr('stroke-width', 2)
-        .attr('stroke-opacity', 0.3);
+    // Calculate rectangle dimensions based on text length
+    const getRectWidth = (d) => {
+        const textLength = d.data.name.length;
+        // Dynamic width: 8px per character + padding, no maximum limit
+        return Math.max(140, textLength * 8.5 + 50);
+    };
+    const rectHeight = 56;
+    const accentWidth = 6;
 
-    // Main circle
-    nodes.append('circle')
-        .attr('r', d => 35 + Math.max(0, d.data.level) * 4)
-        .attr('fill', d => `url(#grad${Math.max(0, d.data.level % gradients.length)})`)
-        .attr('stroke', '#fff')
-        .attr('stroke-width', 3)
-        .style('filter', 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))')
+    // Main dark rectangle background
+    nodes.append('rect')
+        .attr('x', d => -getRectWidth(d) / 2)
+        .attr('y', -rectHeight / 2)
+        .attr('width', d => getRectWidth(d))
+        .attr('height', rectHeight)
+        .attr('rx', 8)
+        .attr('ry', 8)
+        .attr('fill', '#222831')
+        .attr('stroke', '#3c4652')
+        .attr('stroke-width', 1)
+        .style('filter', 'drop-shadow(0 4px 8px rgba(0,0,0,0.4))')
         .style('cursor', 'pointer');
 
-    // Level text inside circle
-    nodes.append('text')
-        .text(d => d.data.level >= 0 ? `L${d.data.level}` : '')
-        .attr('text-anchor', 'middle')
-        .attr('dy', 5)
-        .attr('fill', '#fff')
-        .attr('font-size', '12px')
-        .attr('font-weight', 'bold')
+    // Colored accent bar on the left
+    nodes.append('rect')
+        .attr('x', d => -getRectWidth(d) / 2)
+        .attr('y', -rectHeight / 2)
+        .attr('width', accentWidth)
+        .attr('height', rectHeight)
+        .attr('rx', 8)
+        .attr('ry', 8)
+        .attr('fill', d => d.data.color || '#667eea')
+        .style('cursor', 'pointer')
         .attr('pointer-events', 'none');
 
-    // Name label below circle
+    // Small color dot indicator in top right (for visual balance)
+    nodes.append('circle')
+        .attr('cx', d => getRectWidth(d) / 2 - 12)
+        .attr('cy', -rectHeight / 2 + 12)
+        .attr('r', 4)
+        .attr('fill', d => d.data.color || '#667eea')
+        .attr('pointer-events', 'none');
+
+    // Name label inside rectangle (left-aligned, after the accent bar)
     nodes.append('text')
-        .text(d => {
-            const maxLength = 25;
-            return d.data.name.length > maxLength ?
-                d.data.name.substring(0, maxLength) + '...' : d.data.name;
-        })
-        .attr('text-anchor', 'middle')
-        .attr('dy', d => (40 + Math.max(0, d.data.level) * 5) + 18)
-        .attr('fill', '#fff')
+        .text(d => d.data.name)
+        .attr('x', d => -getRectWidth(d) / 2 + accentWidth + 12)
+        .attr('text-anchor', 'start')
+        .attr('dy', -5)
+        .attr('fill', '#d2dae3')
         .attr('font-size', '13px')
         .attr('font-weight', '600')
-        .style('text-shadow', '0 2px 4px rgba(0,0,0,0.8)')
         .attr('pointer-events', 'none');
 
-    // Hover effects
+    // Level label inside rectangle (below title, left-aligned)
+    nodes.append('text')
+        .text(d => d.data.level >= 0 ? `Level ${d.data.level}` : '')
+        .attr('x', d => -getRectWidth(d) / 2 + accentWidth + 12)
+        .attr('text-anchor', 'start')
+        .attr('dy', 12)
+        .attr('fill', '#9da7b3')
+        .attr('font-size', '10px')
+        .attr('font-weight', '500')
+        .attr('pointer-events', 'none');
+
+    // Hover and click effects
     nodes.on('mouseenter', function(event, d) {
-        d3.select(this).selectAll('circle')
+        // Highlight the main background rect (first rect)
+        d3.select(this).selectAll('rect').filter((d, i) => i === 0)
             .transition().duration(200)
-            .attr('r', function() {
-                const currentR = parseFloat(d3.select(this).attr('r'));
-                return currentR * 1.15;
-            })
-            .attr('stroke-width', 5);
+            .attr('stroke', '#1db954')
+            .attr('stroke-width', 2)
+            .style('filter', 'drop-shadow(0 6px 12px rgba(0,0,0,0.6))');
+
+        // Brighten the accent bar
+        d3.select(this).selectAll('rect').filter((d, i) => i === 1)
+            .transition().duration(200)
+            .attr('width', accentWidth + 2);
 
         if (tooltip) {
             tooltip.querySelector('h4').textContent = d.data.name;
@@ -794,17 +1274,26 @@ function renderMindMap() {
         }
     })
     .on('mouseleave', function(event, d) {
-        d3.select(this).selectAll('circle')
+        // Reset the main background rect
+        d3.select(this).selectAll('rect').filter((d, i) => i === 0)
             .transition().duration(200)
-            .attr('r', function(d, i) {
-                return i === 0 ?
-                    40 + Math.max(0, d.data ? d.data.level : 0) * 5 :
-                    35 + Math.max(0, d.data ? d.data.level : 0) * 4;
-            })
-            .attr('stroke-width', function(d, i) { return i === 0 ? 2 : 3; });
+            .attr('stroke', '#3c4652')
+            .attr('stroke-width', 1)
+            .style('filter', 'drop-shadow(0 4px 8px rgba(0,0,0,0.4))');
+
+        // Reset the accent bar
+        d3.select(this).selectAll('rect').filter((d, i) => i === 1)
+            .transition().duration(200)
+            .attr('width', accentWidth);
 
         if (tooltip) {
             tooltip.style.opacity = '0';
+        }
+    })
+    .on('click', function(event, d) {
+        event.stopPropagation();
+        if (d.data.id !== undefined) {
+            showMindMapColorPicker(event, d.data.id);
         }
     });
 

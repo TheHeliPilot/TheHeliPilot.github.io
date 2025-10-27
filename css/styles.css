@@ -2069,6 +2069,93 @@ select:hover,
         min-height: 400px;
         gap: 0;
     }
+
+    /* Project Detail Page Mobile */
+    .project-tabs {
+        padding: var(--spacing-sm);
+        overflow-x: auto;
+        flex-wrap: nowrap;
+    }
+
+    .project-tab {
+        padding: var(--spacing-sm) var(--spacing-md);
+        font-size: 0.875rem;
+        white-space: nowrap;
+    }
+
+    .project-tab i {
+        display: none;
+    }
+
+    .project-tab-content {
+        padding: var(--spacing-md);
+        min-height: 300px;
+    }
+
+    .notes-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--spacing-sm);
+    }
+
+    .notes-toolbar > div {
+        width: 100%;
+    }
+
+    .notes-toolbar label {
+        display: block;
+        margin-bottom: var(--spacing-xs);
+    }
+
+    .notes-toolbar select {
+        width: 100%;
+    }
+
+    #notesEditor {
+        min-height: 300px;
+    }
+
+    .ql-container.ql-snow {
+        min-height: 250px;
+    }
+
+    /* Study Cards Mobile */
+    .study-card {
+        padding: var(--spacing-sm) var(--spacing-lg) var(--spacing-sm) var(--spacing-sm) !important;
+    }
+
+    .study-card .card-question {
+        font-size: 0.938rem;
+    }
+
+    .study-card-color-indicator {
+        width: 20px;
+        height: 20px;
+        top: var(--spacing-sm);
+        right: var(--spacing-sm);
+    }
+
+    /* Mind Map Mobile */
+    #projectMindMapContainer {
+        height: 400px;
+    }
+
+    .color-picker-modal {
+        position: fixed !important;
+        left: 50% !important;
+        top: 50% !important;
+        transform: translate(-50%, -50%);
+        max-width: 90%;
+    }
+
+    .color-picker-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+
+    .color-picker-option {
+        width: 32px;
+        height: 32px;
+    }
 }
 
 /* === ADMIN CONSOLE === */
@@ -2127,7 +2214,7 @@ select:hover,
 .project-tabs {
     display: flex;
     gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-xl);
+    margin-bottom: 0;
     border-bottom: 2px solid var(--border);
     background: var(--surface);
     padding: var(--spacing-md) var(--spacing-lg);
@@ -2298,6 +2385,186 @@ select:hover,
     background: var(--surface-light);
 }
 
+/* Study Cards - Compact & Editable */
+.study-card {
+    min-height: unset !important;
+    height: auto !important;
+    padding: var(--spacing-md) var(--spacing-xl) var(--spacing-md) var(--spacing-md) !important;
+    cursor: pointer;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+.study-card:hover {
+    background: var(--surface-light);
+}
+
+.study-card.editing {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(29, 185, 84, 0.15);
+}
+
+.study-card-edit-form {
+    display: none;
+}
+
+.study-card.editing .study-card-display {
+    display: none;
+}
+
+.study-card.editing .study-card-edit-form {
+    display: block;
+}
+
+.study-card-display {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    flex: 1;
+}
+
+.study-card .card-question {
+    font-size: 1rem;
+    margin-bottom: 0;
+    line-height: 1.4;
+}
+
+.study-card-color-indicator {
+    position: absolute;
+    top: var(--spacing-md);
+    right: var(--spacing-md);
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-sm);
+    border: 2px solid var(--border);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.study-card-color-indicator:hover {
+    transform: scale(1.1);
+    border-color: var(--primary);
+}
+
+/* Mind Map Styles */
+#projectMindMapContainer {
+    position: relative;
+    width: 100%;
+    height: 600px;
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+#projectMindMapSvg {
+    width: 100%;
+    height: 100%;
+}
+
+#projectMindMapTooltip {
+    position: absolute;
+    background: var(--surface);
+    border: 1px solid var(--primary);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+    max-width: 300px;
+    z-index: 1000;
+    box-shadow: var(--shadow-lg);
+}
+
+#projectMindMapTooltip h4 {
+    margin: 0 0 var(--spacing-sm) 0;
+    color: var(--primary);
+    font-size: 1rem;
+}
+
+#projectMindMapTooltip p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+/* Mind Map Node Styles */
+.mind-map-node {
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.mind-map-node:hover rect {
+    stroke-width: 3;
+    filter: brightness(1.2);
+}
+
+.mind-map-node rect {
+    transition: all var(--transition-fast);
+}
+
+.mind-map-node text {
+    pointer-events: none;
+    user-select: none;
+}
+
+.mind-map-link {
+    fill: none;
+    stroke: var(--border);
+    stroke-width: 2;
+    stroke-opacity: 0.5;
+    transition: all var(--transition-fast);
+}
+
+.mind-map-link:hover {
+    stroke: var(--text-secondary);
+    stroke-opacity: 0.8;
+}
+
+/* Color Picker Modal for Mind Map */
+.color-picker-modal {
+    position: absolute;
+    background: var(--surface);
+    border: 2px solid var(--primary);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md);
+    box-shadow: var(--shadow-xl);
+    z-index: 1001;
+    display: none;
+}
+
+.color-picker-modal.active {
+    display: block;
+}
+
+.color-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+}
+
+.color-picker-option {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all var(--transition-fast);
+}
+
+.color-picker-option:hover {
+    transform: scale(1.1);
+    border-color: var(--text-primary);
+}
+
+.color-picker-option.selected {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--primary);
+}
+
 /* Small phones (max-width: 480px) */
 @media (max-width: 480px) {
     .top-bar h2 {
@@ -2350,5 +2617,46 @@ select:hover,
         padding: var(--spacing-sm);
         font-size: 0.75rem;
         white-space: nowrap;
+    }
+
+    /* Project Detail Small Phones */
+    .project-tabs {
+        padding: var(--spacing-xs);
+    }
+
+    .project-tab {
+        padding: var(--spacing-xs) var(--spacing-sm);
+        font-size: 0.813rem;
+    }
+
+    .project-tab-content {
+        padding: var(--spacing-sm);
+    }
+
+    .notes-toolbar {
+        gap: var(--spacing-xs);
+    }
+
+    .notes-toolbar .btn {
+        padding: var(--spacing-sm) var(--spacing-md);
+        font-size: 0.813rem;
+    }
+
+    #projectMindMapContainer {
+        height: 300px;
+    }
+
+    .study-card {
+        padding: var(--spacing-xs) var(--spacing-md) var(--spacing-xs) var(--spacing-xs) !important;
+        font-size: 0.875rem;
+    }
+
+    .study-card .card-question {
+        font-size: 0.875rem;
+    }
+
+    .study-card-color-indicator {
+        width: 18px;
+        height: 18px;
     }
 }
