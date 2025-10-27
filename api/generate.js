@@ -96,11 +96,29 @@ ${text}`;
 
     // Remove markdown if present
     if (content.startsWith('```')) {
-      content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '');
+      content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    }
+
+    // Remove any leading/trailing non-JSON content
+    const jsonStart = content.indexOf('[');
+    const jsonEnd = content.lastIndexOf(']');
+    if (jsonStart !== -1 && jsonEnd !== -1) {
+      content = content.substring(jsonStart, jsonEnd + 1);
     }
 
     // Parse and validate
-    const cards = JSON.parse(content);
+    let cards;
+    try {
+      cards = JSON.parse(content);
+    } catch (parseError) {
+      console.error('JSON parse error:', parseError);
+      console.error('Content that failed to parse:', content);
+      return res.status(500).json({
+        error: 'Failed to parse AI response',
+        details: parseError.message,
+        rawContent: content.substring(0, 500) // First 500 chars for debugging
+      });
+    }
 
     if (!Array.isArray(cards)) {
       return res.status(500).json({ error: 'Invalid response format' });

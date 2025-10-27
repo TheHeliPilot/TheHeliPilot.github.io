@@ -2122,7 +2122,16 @@ async function loadPublicProjectCards(projectId) {
         }
 
         const cardsData = snapshot.val();
-        const cards = Object.keys(cardsData).map(key => ({ id: key, ...cardsData[key] }));
+        const cards = Object.keys(cardsData).map(key => {
+            const card = { id: key, ...cardsData[key] };
+
+            // Firebase converts arrays to objects - fix that
+            if (card.options && typeof card.options === 'object' && !Array.isArray(card.options)) {
+                card.options = Object.values(card.options);
+            }
+
+            return card;
+        });
 
         cardsList.innerHTML = cards.map((card, idx) => `
             <div class="card-item" style="margin-bottom: 1rem;">
@@ -2318,6 +2327,12 @@ window.startPublicQuiz = async function(projectId) {
         // Remove correctAnswer from client-side data for security
         const quizCards = Object.keys(cardsData).map(key => {
             const card = { ...cardsData[key] };
+
+            // Firebase converts arrays to objects - fix that
+            if (card.options && typeof card.options === 'object' && !Array.isArray(card.options)) {
+                card.options = Object.values(card.options);
+            }
+
             delete card.correctAnswer; // Don't send answers to client
             delete card.explanation; // Don't send explanation until answered
             return { id: key, ...card };
@@ -2383,34 +2398,28 @@ window.selectPublicAnswer = async function(selectedIdx) {
     feedback.innerHTML = '<div class="spinner" style="width: 20px; height: 20px;"></div>';
 
     try {
-        let result;
+        const payload = {
+            projectId: currentPublicQuiz.projectId,
+            cardId: card.id,
+            selectedAnswer: selectedIdx
+        };
+        console.log('Validating answer with payload:', payload);
+        console.log('Current card:', card);
 
-        // Try server-side validation first
-        try {
-            const response = await fetch('https://quizapp2-eight.vercel.app/api/validate-answer', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    projectId: currentPublicQuiz.projectId,
-                    cardId: card.id,
-                    selectedAnswer: selectedIdx
-                })
-            });
+        const response = await fetch('https://quizapp2-eight.vercel.app/api/validate-answer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
 
-            if (!response.ok) throw new Error('API not available');
-            result = await response.json();
-        } catch (apiError) {
-            // Fallback to client-side validation (for local development)
-            console.warn('API unavailable, using client-side validation:', apiError);
-            const cardSnapshot = await get(ref(window.db, `publicProjects/${currentPublicQuiz.projectId}/cards/${card.id}`));
-            const fullCard = cardSnapshot.val();
-
-            result = {
-                isCorrect: parseInt(selectedIdx) === parseInt(fullCard.correctAnswer),
-                correctAnswer: fullCard.correctAnswer,
-                explanation: fullCard.explanation || ''
-            };
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error('API validation failed:', response.status, errorData);
+            throw new Error(`Server error: ${response.status}`);
         }
+
+        const result = await response.json();
+        console.log('API validation result:', result);
 
         const isCorrect = result.isCorrect;
 

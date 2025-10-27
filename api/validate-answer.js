@@ -39,16 +39,43 @@ export default async function handler(req, res) {
 
     // Fetch the card from Firebase to get correct answer
     const firebaseUrl = `https://schizotests-default-rtdb.europe-west1.firebasedatabase.app/publicProjects/${projectId}/cards/${cardId}.json`;
-    const response = await fetch(firebaseUrl);
+
+    let response;
+    try {
+      response = await fetch(firebaseUrl);
+    } catch (fetchError) {
+      console.error('Firebase fetch error:', fetchError);
+      return res.status(500).json({
+        error: 'Failed to connect to Firebase',
+        details: fetchError.message
+      });
+    }
 
     if (!response.ok) {
-      return res.status(404).json({ error: 'Card not found' });
+      console.error(`Firebase returned ${response.status} for ${firebaseUrl}`);
+      return res.status(404).json({
+        error: 'Card not found',
+        projectId,
+        cardId,
+        status: response.status
+      });
     }
 
     const card = await response.json();
 
-    if (!card) {
-      return res.status(404).json({ error: 'Card not found' });
+    if (!card || card === null) {
+      console.error('Card exists but is null/empty');
+      return res.status(404).json({
+        error: 'Card data is empty',
+        projectId,
+        cardId
+      });
+    }
+
+    // Firebase sometimes returns arrays as objects {0: "a", 1: "b"}
+    // Convert options object to array if needed
+    if (card.options && typeof card.options === 'object' && !Array.isArray(card.options)) {
+      card.options = Object.values(card.options);
     }
 
     // Check if answer is correct
@@ -58,7 +85,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       isCorrect,
       explanation: card.explanation || '',
-      correctAnswer: card.correctAnswer // Only sent after user answers
+      correctAnswer: parseInt(card.correctAnswer) // Only sent after user answers
     });
 
   } catch (error) {
