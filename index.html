@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Quiz Generator</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
@@ -293,7 +293,7 @@
                 </div>
 
                 <div class="account-section">
-                    <h3>Pro Membership</h3>
+                    <h3>Membership Status</h3>
                     <div id="proStatus" class="pro-status-card">
                         <div class="pro-status-content">
                             <div class="pro-icon">
@@ -301,16 +301,9 @@
                             </div>
                             <div>
                                 <h4 id="proStatusTitle">Free Plan</h4>
-                                <p id="proStatusDesc">Upgrade to Pro for unlimited AI-generated cards using our premium API keys!</p>
+                                <p id="proStatusDesc">You are currently on the free plan. Contact support to upgrade to Pro for unlimited AI-generated cards!</p>
                             </div>
                         </div>
-                        <button id="upgradeProBtn" class="btn btn-primary">
-                            <i class="fas fa-crown"></i>
-                            Upgrade to Pro
-                        </button>
-                        <button id="cancelProBtn" class="btn btn-danger hidden">
-                            Cancel Pro
-                        </button>
                     </div>
                 </div>
 
@@ -631,7 +624,7 @@
     </div>
 
     <!-- Firebase SDKs -->
-    <script type="module" src="firebase-init.js"></script>
-    <script type="module" src="app.js"></script>
+    <script type="module" src="js/firebase-init.js"></script>
+    <script type="module" src="js/app.js"></script>
 </body>
 </html>

@@ -1,8 +1,8 @@
-import * as AI from './js/ai.js';
-import * as Cards from './js/cards.js';
-import * as Study from './js/study.js';
-import * as Test from './js/test.js';
-import * as UI from './js/ui.js';
+import * as AI from './ai.js';
+import * as Cards from './cards.js';
+import * as Study from './study.js';
+import * as Test from './test.js';
+import * as UI from './ui.js';
 
 // State management
 let flashcards = [];

@@ -1176,27 +1176,21 @@ function loadAccountPage() {
     document.getElementById('accountEmailInput').value = currentUser.email;
     document.getElementById('displayNameInput').value = currentUser.displayName || '';
 
-    // Update Pro status UI
+    // Update Pro status UI (read-only)
     const proStatusCard = document.getElementById('proStatus');
     const proStatusTitle = document.getElementById('proStatusTitle');
     const proStatusDesc = document.getElementById('proStatusDesc');
-    const upgradeProBtn = document.getElementById('upgradeProBtn');
-    const cancelProBtn = document.getElementById('cancelProBtn');
     const proUserNote = document.getElementById('proUserNote');
 
     if (isProUser) {
         proStatusCard.classList.add('is-pro');
-        proStatusTitle.textContent = 'Pro Member';
+        proStatusTitle.textContent = 'Pro Member ⭐';
         proStatusDesc.textContent = 'You have unlimited access to AI-generated cards using our premium API!';
-        upgradeProBtn.classList.add('hidden');
-        cancelProBtn.classList.remove('hidden');
         proUserNote.classList.remove('hidden');
     } else {
         proStatusCard.classList.remove('is-pro');
         proStatusTitle.textContent = 'Free Plan';
-        proStatusDesc.textContent = 'Upgrade to Pro for unlimited AI-generated cards using our premium API keys!';
-        upgradeProBtn.classList.remove('hidden');
-        cancelProBtn.classList.add('hidden');
+        proStatusDesc.textContent = 'You are currently on the free plan. Contact support to upgrade to Pro for unlimited AI-generated cards!';
         proUserNote.classList.add('hidden');
     }
 
@@ -1232,46 +1226,12 @@ function initAccount() {
     const updateProfileBtn = document.getElementById('updateProfileBtn');
     const changePasswordBtn = document.getElementById('changePasswordBtn');
     const deleteAccountBtn = document.getElementById('deleteAccountBtn');
-    const upgradeProBtn = document.getElementById('upgradeProBtn');
-    const cancelProBtn = document.getElementById('cancelProBtn');
     const saveOpenAIKey = document.getElementById('saveOpenAIKey');
     const saveClaudeKey = document.getElementById('saveClaudeKey');
     const saveGeminiKey = document.getElementById('saveGeminiKey');
     const clearOpenAIKey = document.getElementById('clearOpenAIKey');
     const clearClaudeKey = document.getElementById('clearClaudeKey');
     const clearGeminiKey = document.getElementById('clearGeminiKey');
-
-    // Pro membership management
-    upgradeProBtn.addEventListener('click', async () => {
-        // For now, just enable pro status - in production add payment processing
-        if (confirm('Upgrade to Pro membership? (Free for now - payment integration coming soon)')) {
-            try {
-                const proRef = ref(window.db, `users/${currentUser.uid}/isPro`);
-                await set(proRef, true);
-                isProUser = true;
-                updateProUI();
-                loadAccountPage();
-                showNotification('Welcome to Pro! You now have unlimited AI generation.', 'success');
-            } catch (error) {
-                showNotification('Error upgrading account: ' + error.message, 'error');
-            }
-        }
-    });
-
-    cancelProBtn.addEventListener('click', async () => {
-        if (confirm('Are you sure you want to cancel your Pro membership?')) {
-            try {
-                const proRef = ref(window.db, `users/${currentUser.uid}/isPro`);
-                await set(proRef, false);
-                isProUser = false;
-                updateProUI();
-                loadAccountPage();
-                showNotification('Pro membership cancelled', 'success');
-            } catch (error) {
-                showNotification('Error cancelling membership: ' + error.message, 'error');
-            }
-        }
-    });
 
     updateProfileBtn.addEventListener('click', async () => {
         const displayName = document.getElementById('displayNameInput').value.trim();
