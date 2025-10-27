@@ -1074,26 +1074,57 @@ select:hover,
     font-size: 0.625rem;
 }
 
+.dev-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    background: linear-gradient(135deg, #9d4edd 0%, #c77dff 100%);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.25rem 0.625rem;
+    border-radius: var(--radius-full);
+    margin-left: var(--spacing-sm);
+    vertical-align: middle;
+}
+
+.dev-badge i {
+    font-size: 0.625rem;
+}
+
+.admin-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    background: linear-gradient(135deg, #ff5c5c 0%, #ff7b7b 100%);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.25rem 0.625rem;
+    border-radius: var(--radius-full);
+    margin-left: var(--spacing-sm);
+    vertical-align: middle;
+}
+
+.admin-badge i {
+    font-size: 0.625rem;
+}
+
 /* === MODALS === */
 .modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 1000;
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 999999 !important;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: var(--spacing-lg);
+    isolation: isolate;
 }
 
 .modal-backdrop {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    position: fixed !important;
+    inset: 0 !important;
     background: rgba(0, 0, 0, 0.7);
     backdrop-filter: blur(4px);
 }

@@ -64,6 +64,14 @@
                     <i class="fas fa-home"></i>
                     <span>Dashboard</span>
                 </a>
+                <a href="#" class="nav-link" data-page="explore">
+                    <i class="fas fa-globe"></i>
+                    <span>Explore</span>
+                </a>
+                <a href="#" class="nav-link" data-page="leaderboard">
+                    <i class="fas fa-trophy"></i>
+                    <span>Leaderboard</span>
+                </a>
                 <a href="#" class="nav-link" data-page="projects">
                     <i class="fas fa-folder"></i>
                     <span>Projects</span>
@@ -72,12 +80,8 @@
                     <i class="fas fa-layer-group"></i>
                     <span>Cards</span>
                 </a>
-                <a href="#" class="nav-link" data-page="explore">
-                    <i class="fas fa-globe"></i>
-                    <span>Explore</span>
-                </a>
                 <a href="#" class="nav-link" data-page="study">
-                    <i class="fas fa-book-reader"></i>
+                    <i class="fas fa-brain"></i>
                     <span>Study</span>
                 </a>
                 <a href="#" class="nav-link" data-page="test">
@@ -128,6 +132,14 @@
                             <span id="proBadge" class="pro-badge hidden">
                                 <i class="fas fa-crown"></i>
                                 PRO
+                            </span>
+                            <span id="devBadge" class="dev-badge hidden">
+                                <i class="fas fa-tools"></i>
+                                DEV
+                            </span>
+                            <span id="adminBadge" class="admin-badge hidden">
+                                <i class="fas fa-shield-alt"></i>
+                                ADMIN
                             </span>
                         </button>
                     </div>
@@ -253,76 +265,28 @@
                 </div>
             </div>
 
-            <!-- Study Mode Page -->
+            <!-- Study Page -->
             <div id="studyPage" class="page">
-                <div id="studySetup" class="study-setup">
-                    <h3>Start Studying</h3>
+                <div class="page-header">
+                    <h2>Study Materials</h2>
+                </div>
+                <div class="study-setup">
+                    <h3>Select Project to Study</h3>
                     <div class="form-group">
                         <label>Select Project</label>
                         <select id="studyProjectSelect" class="select-input">
                             <option value="">Select a project</option>
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="studyRandomOrder">
-                            <span>Random order</span>
-                        </label>
-                    </div>
-                    <button id="startStudyBtn" class="btn btn-primary btn-large">
-                        <i class="fas fa-play"></i>
-                        Start Studying
-                    </button>
-                </div>
-
-                <div id="studyActive" class="study-active hidden">
-                    <div class="study-header">
-                        <div class="study-progress">
-                            Card <span id="currentStudyCard">1</span> of <span id="totalStudyCards">0</span>
-                        </div>
-                        <button id="endStudyBtn" class="btn btn-secondary btn-sm">
-                            <i class="fas fa-times"></i>
-                            End Study
+                    <div class="button-group">
+                        <button id="viewStudyListBtn" class="btn btn-primary">
+                            <i class="fas fa-list"></i>
+                            View Study Cards
                         </button>
-                    </div>
-
-                    <div class="study-card-container">
-                        <button id="prevCardBtn" class="study-nav-btn study-nav-prev">
-                            <i class="fas fa-chevron-left"></i>
+                        <button id="viewStudyMindMapBtn" class="btn btn-secondary">
+                            <i class="fas fa-project-diagram"></i>
+                            View Mind Map
                         </button>
-
-                        <div class="study-card" id="studyCard">
-                            <div class="study-card-inner">
-                                <div class="study-card-front">
-                                    <div class="study-card-label">Question</div>
-                                    <div class="study-card-content" id="studyQuestion"></div>
-                                    <div class="study-card-hint">
-                                        <i class="fas fa-hand-pointer"></i>
-                                        <span class="desktop-hint">Click to reveal answer</span>
-                                        <span class="mobile-hint">Tap to reveal answer</span>
-                                    </div>
-                                </div>
-                                <div class="study-card-back">
-                                    <div class="study-card-label">Answer</div>
-                                    <div class="study-card-content" id="studyAnswer"></div>
-                                    <div class="study-card-explanation" id="studyExplanation"></div>
-                                    <div class="study-card-hint">
-                                        <i class="fas fa-hand-pointer"></i>
-                                        <span class="desktop-hint">Click to show question</span>
-                                        <span class="mobile-hint">Tap to show question</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <button id="nextCardBtn" class="study-nav-btn study-nav-next">
-                            <i class="fas fa-chevron-right"></i>
-                        </button>
-                    </div>
-
-                    <div class="study-swipe-hint">
-                        <i class="fas fa-hand-point-left"></i>
-                        Swipe left or right to navigate
                     </div>
                 </div>
             </div>
@@ -388,6 +352,42 @@
                         <div class="results-actions">
                             <button id="retakeTestBtn" class="btn btn-primary">Retake Test</button>
                             <button id="backToDashboardBtn" class="btn btn-secondary">Back to Dashboard</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Study Materials Viewer Page -->
+            <div id="studyMaterialsPage" class="page">
+                <div class="page-header">
+                    <h2 id="studyMaterialsTitle">Study Materials</h2>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button id="studyListViewBtn" class="btn btn-secondary active">
+                            <i class="fas fa-list"></i> List View
+                        </button>
+                        <button id="studyMindMapViewBtn" class="btn btn-secondary">
+                            <i class="fas fa-project-diagram"></i> Mind Map
+                        </button>
+                        <button id="closeStudyMaterialsBtn" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Close
+                        </button>
+                    </div>
+                </div>
+
+                <!-- List View -->
+                <div id="studyListView" class="active">
+                    <div id="studyCardsList" style="display: flex; flex-direction: column; gap: 1rem;">
+                        <!-- Study cards will be rendered here -->
+                    </div>
+                </div>
+
+                <!-- Mind Map View -->
+                <div id="studyMindMapView" class="hidden">
+                    <div id="mindMapContainer" style="width: 100%; height: calc(100vh - 200px); background: var(--background); border: 1px solid var(--border); border-radius: var(--radius-lg); position: relative;">
+                        <svg id="mindMapSvg" style="width: 100%; height: 100%;"></svg>
+                        <div id="mindMapTooltip" style="position: absolute; padding: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-xl); pointer-events: none; opacity: 0; transition: opacity 0.2s; max-width: 400px;">
+                            <h4 style="margin: 0 0 0.5rem 0; color: var(--primary);"></h4>
+                            <p style="margin: 0; color: var(--text-secondary);"></p>
                         </div>
                     </div>
                 </div>
@@ -567,6 +567,24 @@
                 </div>
             </div>
 
+            <!-- Leaderboard Page -->
+            <div id="leaderboardPage" class="page">
+                <div class="page-header">
+                    <h2><i class="fas fa-trophy"></i> Global Leaderboards</h2>
+                    <p>Top performers across all quizzes</p>
+                </div>
+
+                <div class="section" style="margin-top: 2rem;">
+                    <h3><i class="fas fa-fire"></i> Top Users by Streak</h3>
+                    <div id="topStreaksLeaderboard"></div>
+                </div>
+
+                <div class="section" style="margin-top: 2rem;">
+                    <h3><i class="fas fa-star"></i> Quiz Masters (Questions Answered)</h3>
+                    <div id="globalLeaderboard"></div>
+                </div>
+            </div>
+
             <!-- Admin Console Page -->
             <div id="adminPage" class="page">
                 <div class="admin-tabs">
@@ -579,10 +597,15 @@
                 <!-- Users Tab -->
                 <div id="usersTab" class="admin-tab-content active">
                     <div class="page-header">
-                        <input type="text" id="adminUserSearch" class="text-input" placeholder="Search by email or UID..." style="flex: 1; max-width: 400px;">
+                        <input type="text" id="adminUserSearch" class="text-input" placeholder="Search by email or UID (leave empty to show all)..." style="flex: 1; max-width: 400px;">
                         <button id="searchUsersBtn" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
                     </div>
-                    <div id="adminUsersList"></div>
+                    <div id="adminUsersList">
+                        <div class="empty-state">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Loading users...</p>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Devs Tab -->
@@ -626,6 +649,42 @@
                                 <div class="stat-label">Public Projects</div>
                             </div>
                         </div>
+                        <div class="stat-card">
+                            <div class="stat-icon"><i class="fas fa-fire"></i></div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="avgStreak">0</div>
+                                <div class="stat-label">Avg Daily Streak</div>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon"><i class="fas fa-chart-line"></i></div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="totalQuizAttempts">0</div>
+                                <div class="stat-label">Total Quiz Attempts</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section" style="margin-top: 2rem;">
+                        <h3>Analytics Charts</h3>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem;">
+                            <div style="background: var(--surface); padding: 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border);">
+                                <h4 style="margin-bottom: 1rem; color: var(--text-primary);">User Activity (Last 7 Days)</h4>
+                                <canvas id="activityChart"></canvas>
+                            </div>
+                            <div style="background: var(--surface); padding: 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border);">
+                                <h4 style="margin-bottom: 1rem; color: var(--text-primary);">User Distribution</h4>
+                                <canvas id="userTypeChart"></canvas>
+                            </div>
+                            <div style="background: var(--surface); padding: 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border);">
+                                <h4 style="margin-bottom: 1rem; color: var(--text-primary);">Top Public Projects</h4>
+                                <canvas id="topProjectsChart"></canvas>
+                            </div>
+                            <div style="background: var(--surface); padding: 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border);">
+                                <h4 style="margin-bottom: 1rem; color: var(--text-primary);">Daily Streaks</h4>
+                                <canvas id="streaksChart"></canvas>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -657,10 +716,36 @@
                         <input type="color" id="projectColorInput" value="#1db954">
                     </div>
                 </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="generateOnCreate">
+                        <span>Generate study materials from content (Pro/Dev)</span>
+                    </label>
+                </div>
+                <div id="generateContentSection" class="hidden">
+                    <div class="form-group">
+                        <label>Study Material Content</label>
+                        <textarea id="projectContentInput" class="text-input" rows="8" placeholder="Paste your study material here..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>AI Model</label>
+                        <select id="projectAIModel" class="select-input">
+                            <option value="gpt-4o">GPT-4o (Best Quality)</option>
+                            <option value="gpt-4o-mini" selected>GPT-4o Mini (Balanced)</option>
+                            <option value="gpt-5-nano-2025-08-07">GPT-5 Nano (Cost-Effective)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Quiz Cards</label>
+                        <input type="number" id="projectQuizCount" class="text-input" value="30" min="10" max="50">
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" data-modal="projectModal">Cancel</button>
-                <button id="saveProjectBtn" class="btn btn-primary">Save Project</button>
+                <button id="saveProjectBtn" class="btn btn-primary">
+                    <span id="saveProjectBtnText">Save Project</span>
+                </button>
             </div>
         </div>
     </div>
@@ -1005,8 +1090,142 @@
         </div>
     </div>
 
+    <!-- Manage Public Project Cards Modal -->
+    <div id="publicCardsModal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content modal-lg" style="max-width: 900px;">
+            <div class="modal-header">
+                <h3 id="publicCardsModalTitle">Manage Cards</h3>
+                <button class="modal-close" data-modal="publicCardsModal"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <button id="addPublicCardBtn" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Add Card
+                    </button>
+                    <button id="generatePublicCardsBtn" class="btn btn-secondary">
+                        <i class="fas fa-magic"></i> Generate with AI
+                    </button>
+                </div>
+                <div id="publicCardsList"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Public Card Modal -->
+    <div id="editPublicCardModal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3 id="editPublicCardTitle">Add Card</h3>
+                <button class="modal-close" data-modal="editPublicCardModal"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Question</label>
+                    <textarea id="publicCardQuestion" class="text-input" rows="3" placeholder="Enter your question..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Options</label>
+                    <div class="answer-options">
+                        <div class="answer-option">
+                            <input type="radio" name="publicCorrectAnswer" value="0" checked>
+                            <input type="text" id="publicOption0" class="text-input" placeholder="Option A">
+                            <span class="correct-label">Correct</span>
+                        </div>
+                        <div class="answer-option">
+                            <input type="radio" name="publicCorrectAnswer" value="1">
+                            <input type="text" id="publicOption1" class="text-input" placeholder="Option B">
+                            <span class="correct-label">Correct</span>
+                        </div>
+                        <div class="answer-option">
+                            <input type="radio" name="publicCorrectAnswer" value="2">
+                            <input type="text" id="publicOption2" class="text-input" placeholder="Option C">
+                            <span class="correct-label">Correct</span>
+                        </div>
+                        <div class="answer-option">
+                            <input type="radio" name="publicCorrectAnswer" value="3">
+                            <input type="text" id="publicOption3" class="text-input" placeholder="Option D">
+                            <span class="correct-label">Correct</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Explanation (Optional)</label>
+                    <textarea id="publicCardExplanation" class="text-input" rows="2" placeholder="Explain why this is the correct answer..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Difficulty</label>
+                    <select id="publicCardDifficulty" class="select-input">
+                        <option value="easy">Easy</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="hard">Hard</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-modal="editPublicCardModal">Cancel</button>
+                <button id="savePublicCardBtn" class="btn btn-primary">Save Card</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generate Study Materials Modal -->
+    <div id="studyMaterialsModal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3><i class="fas fa-brain"></i> Generate Study Materials</h3>
+                <button class="modal-close" data-modal="studyMaterialsModal"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Study Material Content</label>
+                    <textarea id="studyMaterialInput" class="text-input" rows="10" placeholder="Paste your study content here (notes, textbook chapters, lecture transcripts, etc.)..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>AI Model</label>
+                    <select id="studyMaterialModel" class="select-input">
+                        <option value="gpt-4o">GPT-4o (Best Quality)</option>
+                        <option value="gpt-4o-mini" selected>GPT-4o Mini (Balanced)</option>
+                        <option value="gpt-5-nano-2025-08-07">GPT-5 Nano (Cost-Effective)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Quiz Cards to Generate</label>
+                    <input type="number" id="quizCardCount" class="text-input" value="30" min="10" max="50">
+                    <p style="color: var(--text-muted); font-size: 0.75rem; margin-top: 0.25rem;">Study cards will be generated automatically based on content length</p>
+                </div>
+
+                <div id="studyMaterialGenerating" class="ai-generating hidden">
+                    <div class="spinner"></div>
+                    <p id="studyMaterialStatus">Generating study materials...</p>
+                </div>
+
+                <div id="studyMaterialError" class="hidden" style="padding: 1rem; background: rgba(255, 92, 92, 0.1); border: 1px solid var(--danger); border-radius: var(--radius-md); margin-top: 1rem;">
+                    <p style="color: var(--danger); margin: 0;"></p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-modal="studyMaterialsModal">Cancel</button>
+                <button id="generateStudyMaterialsBtn" class="btn btn-primary">
+                    <i class="fas fa-magic"></i> Generate All
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart.js for Analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <!-- D3.js for Mind Map -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+
     <!-- Firebase SDKs -->
     <script type="module" src="js/firebase-init.js"></script>
     <script type="module" src="js/app.js"></script>
+    <script type="module" src="js/study-materials.js"></script>
 </body>
 </html>

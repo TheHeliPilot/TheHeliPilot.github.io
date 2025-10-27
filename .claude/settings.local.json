@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(npm install)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(cat:*)",
+      "Bash(awk:*)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []

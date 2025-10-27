@@ -9,6 +9,7 @@ These security rules control access to your Firebase Realtime Database. Copy and
 {
   "rules": {
     "users": {
+      ".read": "auth != null && root.child('users').child(auth.uid).child('isAdmin').val() === true",
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('isAdmin').val() === true)",
         ".write": "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('isAdmin').val() === true)",

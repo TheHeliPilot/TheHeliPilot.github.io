@@ -25,20 +25,25 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js';
 
 // Global state
-let currentUser = null;
-let projects = [];
+window.currentUser = null;
+let currentUser = window.currentUser; // Keep local reference for convenience
+window.projects = []; // Expose to other modules like study-materials.js
+let projects = window.projects; // Keep local reference for convenience
 let cards = [];
 let currentTest = null;
-let currentStudy = null;
 let editingProject = null;
 let editingCard = null;
 let isRegistering = false;
-let isProUser = false;
-let isDevUser = false;
-let isAdminUser = false;
+window.isProUser = false;
+window.isDevUser = false;
+window.isAdminUser = false;
+let isProUser = window.isProUser;
+let isDevUser = window.isDevUser;
+let isAdminUser = window.isAdminUser;
 let publicProjects = [];
 let editingPublicProject = null;
 let currentPublicQuiz = null;
+let isGeneratingForPublicProject = false; // Track if AI generation is for public project
 
 // Pro API Configuration - Using Vercel for security
 const PRO_API_CONFIG = {
@@ -114,17 +119,64 @@ function initAuth() {
     // Auth state observer
     onAuthStateChanged(window.auth, async (user) => {
         if (user) {
+            window.currentUser = user;
             currentUser = user;
+
+            // Check if user is banned
+            const bannedRef = ref(window.db, `users/${user.uid}/isBanned`);
+            const bannedSnapshot = await get(bannedRef);
+            const isBanned = bannedSnapshot.exists() ? bannedSnapshot.val() : false;
+
+            if (isBanned) {
+                await signOut(window.auth);
+                showNotification('Your account has been banned. Contact support for assistance.', 'error');
+                return;
+            }
+
+            // Store/update displayName in database
+            const displayName = user.displayName || user.email.split('@')[0];
+            await ensureUserProfile(user.uid, displayName, user.email);
+
             document.getElementById('authPage').classList.add('hidden');
             document.getElementById('mainApp').classList.remove('hidden');
-            document.getElementById('userDisplayName').textContent = user.displayName || user.email.split('@')[0];
+            document.getElementById('userDisplayName').textContent = displayName;
+
+            // Update daily streak
+            await updateDailyStreak(user.uid);
+
             await loadUserData();
         } else {
+            window.currentUser = null;
             currentUser = null;
             document.getElementById('authPage').classList.remove('hidden');
             document.getElementById('mainApp').classList.add('hidden');
         }
     });
+}
+
+// Ensure user profile exists with displayName
+async function ensureUserProfile(uid, displayName, email) {
+    try {
+        const userRef = ref(window.db, `users/${uid}`);
+        const snapshot = await get(userRef);
+
+        const updates = {};
+        if (!snapshot.exists() || !snapshot.val().displayName) {
+            updates.displayName = displayName;
+        }
+        if (!snapshot.exists() || !snapshot.val().email) {
+            updates.email = email;
+        }
+        if (!snapshot.exists() || !snapshot.val().joinedAt) {
+            updates.joinedAt = Date.now();
+        }
+
+        if (Object.keys(updates).length > 0) {
+            await update(userRef, updates);
+        }
+    } catch (error) {
+        console.error('Error ensuring user profile:', error);
+    }
 }
 
 // ============================================
@@ -160,8 +212,28 @@ function initNavigation() {
             if (pageName === 'study') updateProjectSelects();
             if (pageName === 'account') loadAccountPage();
             if (pageName === 'explore') loadPublicProjects();
+            if (pageName === 'leaderboard') {
+                (async () => {
+                    await loadPublicProjects(); // Need this for global leaderboard
+                    const usersSnapshot = await get(ref(window.db, 'users'));
+                    const users = usersSnapshot.exists() ? Object.entries(usersSnapshot.val()).map(([uid, data]) => ({ uid, ...data })) : [];
+                    await loadTopStreaksLeaderboard(users);
+                    await loadGlobalLeaderboard();
+                })();
+            }
             if (pageName === 'dev') loadPublicProjects();
-            if (pageName === 'admin') { loadPublicProjects(); loadAdminAnalytics(); }
+            if (pageName === 'admin') {
+                // Reload admin status to make sure it's fresh
+                (async () => {
+                    await loadProStatus();
+                    if (isAdminUser) {
+                        await loadPublicProjects();
+                        await loadAdminAnalytics();
+                    } else {
+                        showNotification('Admin access required', 'error');
+                    }
+                })();
+            }
         });
     });
 
@@ -179,12 +251,13 @@ function initNavigation() {
 // ============================================
 
 async function loadUserData() {
+    await loadProStatus();
     await Promise.all([
-        loadProStatus(),
         loadProjects(),
         loadCards()
     ]);
     updateDashboard();
+    await updateProUI(); // Update UI with generation limits
 }
 
 async function loadProStatus() {
@@ -201,22 +274,30 @@ async function loadProStatus() {
             get(adminRef)
         ]);
 
-        isProUser = proSnapshot.exists() ? proSnapshot.val() : false;
-        isDevUser = devSnapshot.exists() ? devSnapshot.val() : false;
-        isAdminUser = adminSnapshot.exists() ? adminSnapshot.val() : false;
+        window.isProUser = proSnapshot.exists() ? proSnapshot.val() : false;
+        window.isDevUser = devSnapshot.exists() ? devSnapshot.val() : false;
+        window.isAdminUser = adminSnapshot.exists() ? adminSnapshot.val() : false;
+        isProUser = window.isProUser;
+        isDevUser = window.isDevUser;
+        isAdminUser = window.isAdminUser;
+
+        console.log('User status loaded:', { isProUser, isDevUser, isAdminUser });
 
         updateProUI();
         updateDevUI();
         updateAdminUI();
     } catch (error) {
         console.error('Error loading pro/dev/admin status:', error);
+        window.isProUser = false;
+        window.isDevUser = false;
+        window.isAdminUser = false;
         isProUser = false;
         isDevUser = false;
         isAdminUser = false;
     }
 }
 
-function updateProUI() {
+async function updateProUI() {
     // Update pro badge in top bar
     const proBadge = document.getElementById('proBadge');
     if (isProUser) {
@@ -228,12 +309,23 @@ function updateProUI() {
     // Update AI modal for pro users
     const proAINote = document.getElementById('proAINote');
     const proProviderOption = document.getElementById('proProviderOption');
-    if (isProUser) {
-        proAINote.classList.remove('hidden');
-        proProviderOption.classList.remove('hidden');
+    if (isProUser || isDevUser) {
+        if (proAINote) proAINote.classList.remove('hidden');
+        if (proProviderOption) proProviderOption.classList.remove('hidden');
+
+        // Show remaining generations for Pro users (not Dev/Admin)
+        if (isProUser && !isDevUser && !isAdminUser) {
+            const remaining = await getRemainingGenerations();
+            if (proAINote && remaining !== null) {
+                const limitText = proAINote.querySelector('p');
+                if (limitText) {
+                    limitText.innerHTML = `<i class="fas fa-crown" style="color: #ffd700;"></i> <strong>Pro Member:</strong> Select "Pro API" to generate cards! (${remaining}/5 remaining today)`;
+                }
+            }
+        }
     } else {
-        proAINote.classList.add('hidden');
-        proProviderOption.classList.add('hidden');
+        if (proAINote) proAINote.classList.add('hidden');
+        if (proProviderOption) proProviderOption.classList.add('hidden');
     }
 }
 
@@ -258,6 +350,26 @@ function updateDevUI() {
         } else {
             isDevUserEl.classList.add('hidden');
             notDevUserEl.classList.remove('hidden');
+        }
+    }
+
+    // Show dev badge in top bar
+    const devBadge = document.getElementById('devBadge');
+    if (devBadge) {
+        if (isDevUser && !isAdminUser) {
+            devBadge.classList.remove('hidden');
+        } else {
+            devBadge.classList.add('hidden');
+        }
+    }
+
+    // Show admin badge in top bar
+    const adminBadge = document.getElementById('adminBadge');
+    if (adminBadge) {
+        if (isAdminUser) {
+            adminBadge.classList.remove('hidden');
+        } else {
+            adminBadge.classList.add('hidden');
         }
     }
 }
@@ -385,9 +497,12 @@ function renderProjects() {
             <div class="project-header">
                 <div>
                     <div class="project-title">${escapeHtml(project.name)}</div>
-                    <div class="project-stats">${getProjectCardCount(project.id)} cards</div>
+                    <div class="project-stats">${getProjectCardCount(project.id)} cards${project.studyCardsCount ? ` • ${project.studyCardsCount} study cards` : ''}</div>
                 </div>
                 <div class="project-actions">
+                    <button class="project-action-btn" onclick="window.generateStudyMaterials('${project.id}')" title="Generate Study Materials">
+                        <i class="fas fa-brain"></i>
+                    </button>
                     <button class="project-action-btn" onclick="window.editProject('${project.id}')">
                         <i class="fas fa-edit"></i>
                     </button>
@@ -397,6 +512,11 @@ function renderProjects() {
                 </div>
             </div>
             ${project.description ? `<p style="color: var(--text-secondary); margin-top: 0.5rem;">${escapeHtml(project.description)}</p>` : ''}
+            ${project.studyCards ? `
+                <button class="btn btn-primary" onclick="window.viewStudyMaterials('${project.id}')" style="margin-top: 0.5rem; width: 100%;">
+                    <i class="fas fa-brain"></i> View Study Materials
+                </button>
+            ` : ''}
         </div>
     `).join('');
 }
@@ -411,6 +531,18 @@ function initProjects() {
         document.getElementById('projectNameInput').value = '';
         document.getElementById('projectDescInput').value = '';
         document.getElementById('projectColorInput').value = '#1db954';
+
+        // Show generation option for new projects
+        const generateCheckbox = document.getElementById('generateOnCreate');
+        const generateSection = document.getElementById('generateContentSection');
+        if (generateCheckbox) {
+            generateCheckbox.checked = false;
+            generateCheckbox.parentElement.style.display = 'block';
+        }
+        if (generateSection) {
+            generateSection.classList.add('hidden');
+        }
+
         openModal('projectModal');
     });
 
@@ -418,9 +550,16 @@ function initProjects() {
         const name = document.getElementById('projectNameInput').value.trim();
         const description = document.getElementById('projectDescInput').value.trim();
         const color = document.getElementById('projectColorInput').value;
+        const generateOnCreate = document.getElementById('generateOnCreate')?.checked;
+        const content = document.getElementById('projectContentInput')?.value.trim();
 
         if (!name) {
             showNotification('Please enter a project name', 'error');
+            return;
+        }
+
+        if (generateOnCreate && !content) {
+            showNotification('Please enter study material content', 'error');
             return;
         }
 
@@ -432,17 +571,39 @@ function initProjects() {
                 createdAt: Date.now()
             };
 
+            let newProjectId = editingProject;
+
             if (editingProject) {
                 const projectRef = ref(window.db, `users/${currentUser.uid}/projects/${editingProject}`);
                 await update(projectRef, projectData);
                 showNotification('Project updated successfully', 'success');
             } else {
                 const projectsRef = ref(window.db, `users/${currentUser.uid}/projects`);
-                await push(projectsRef, projectData);
+                const newProject = await push(projectsRef, projectData);
+                newProjectId = newProject.key;
                 showNotification('Project created successfully', 'success');
             }
 
             closeModal('projectModal');
+
+            // Generate study materials if requested
+            if (generateOnCreate && !editingProject && newProjectId) {
+                window.currentGeneratingProjectId = newProjectId;
+
+                // Auto-fill the study materials modal
+                document.getElementById('studyMaterialInput').value = content;
+                document.getElementById('studyMaterialModel').value = document.getElementById('projectAIModel').value;
+                document.getElementById('quizCardCount').value = document.getElementById('projectQuizCount').value;
+
+                // Trigger generation
+                openModal('studyMaterialsModal');
+
+                // Auto-click generate after modal opens
+                setTimeout(() => {
+                    document.getElementById('generateStudyMaterialsBtn').click();
+                }, 500);
+            }
+
             await loadProjects();
             updateDashboard();
         } catch (error) {
@@ -461,6 +622,18 @@ window.editProject = async function(projectId) {
     document.getElementById('projectNameInput').value = project.name;
     document.getElementById('projectDescInput').value = project.description || '';
     document.getElementById('projectColorInput').value = project.color || '#1db954';
+
+    // Hide generation option when editing
+    const generateCheckbox = document.getElementById('generateOnCreate');
+    const generateSection = document.getElementById('generateContentSection');
+    if (generateCheckbox) {
+        generateCheckbox.checked = false;
+        generateCheckbox.parentElement.style.display = 'none';
+    }
+    if (generateSection) {
+        generateSection.classList.add('hidden');
+    }
+
     openModal('projectModal');
 };
 
@@ -677,6 +850,18 @@ function initCards() {
 
     generateCardsBtn.addEventListener('click', () => {
         openModal('aiModal');
+        // Auto-select project after modal opens
+        setTimeout(() => {
+            const aiProjectSelect = document.getElementById('aiProjectSelect');
+            if (aiProjectSelect && !aiProjectSelect.value) {
+                const currentFilter = document.getElementById('projectFilter').value;
+                if (currentFilter && currentFilter !== 'all') {
+                    aiProjectSelect.value = currentFilter;
+                } else if (projects.length === 1) {
+                    aiProjectSelect.value = projects[0].id;
+                }
+            }
+        }, 50);
     });
 
     projectFilter.addEventListener('change', () => {
@@ -799,7 +984,7 @@ function initAI() {
 
     // Auto generate with API
     generateBtn.addEventListener('click', async () => {
-        const projectId = document.getElementById('aiProjectSelect').value;
+        const projectId = isGeneratingForPublicProject ? currentPublicProjectId : document.getElementById('aiProjectSelect').value;
         const provider = document.getElementById('aiProvider').value;
         const text = document.getElementById('aiTextInput').value.trim();
         const count = parseInt(document.getElementById('aiCardCount').value);
@@ -827,14 +1012,23 @@ function initAI() {
 
             if (provider === 'pro') {
                 // Pro users: Use secure Cloudflare Worker
-                if (!isProUser) {
-                    showNotification('Pro API is only available to Pro members', 'error');
+                if (!isProUser && !isDevUser) {
+                    showNotification('Pro API is only available to Pro/Dev members', 'error');
                     return;
                 }
 
                 if (!PRO_API_CONFIG.workerUrl) {
                     showNotification('Pro API is not configured. Please contact support.', 'error');
                     return;
+                }
+
+                // Check generation limits for Pro users (Devs have unlimited)
+                if (isProUser && !isDevUser && !isAdminUser) {
+                    const canGenerate = await checkGenerationLimit();
+                    if (!canGenerate) {
+                        showNotification('Daily generation limit reached (5/day). Upgrade to Dev or use your own API key.', 'error');
+                        return;
+                    }
                 }
 
                 // Get selected model
@@ -874,12 +1068,25 @@ function initAI() {
                 cards = await generateCardsWithAI(provider, apiKey, text, count, difficulty);
             }
 
-            await saveGeneratedCards(projectId, cards);
+            if (isGeneratingForPublicProject) {
+                await saveGeneratedCardsToPublicProject(projectId, cards);
+                closeModal('aiModal');
+                showNotification(`Successfully generated ${cards.length} cards!`, 'success');
+                await loadPublicProjectCards(projectId);
+                openModal('publicCardsModal');
+                isGeneratingForPublicProject = false;
+            } else {
+                await saveGeneratedCards(projectId, cards);
+                closeModal('aiModal');
+                showNotification(`Successfully generated ${cards.length} cards!`, 'success');
+                await loadCards();
+                updateDashboard();
+            }
 
-            closeModal('aiModal');
-            showNotification(`Successfully generated ${cards.length} cards!`, 'success');
-            await loadCards();
-            updateDashboard();
+            // Increment generation count for Pro users
+            if (provider === 'pro' && isProUser && !isDevUser && !isAdminUser) {
+                await incrementGenerationCount();
+            }
         } catch (error) {
             console.error('Error generating cards:', error);
             document.getElementById('aiError').classList.remove('hidden');
@@ -919,7 +1126,7 @@ function initAI() {
 
     // Import cards from JSON response
     importCardsBtn.addEventListener('click', async () => {
-        const projectId = document.getElementById('aiProjectSelect').value;
+        const projectId = isGeneratingForPublicProject ? currentPublicProjectId : document.getElementById('aiProjectSelect').value;
         const jsonResponse = document.getElementById('aiResponse').value.trim();
 
         if (!projectId) {
@@ -933,12 +1140,21 @@ function initAI() {
 
         try {
             const cards = parseAIResponse(jsonResponse);
-            await saveGeneratedCards(projectId, cards);
 
-            closeModal('aiModal');
-            showNotification(`Successfully imported ${cards.length} cards!`, 'success');
-            await loadCards();
-            updateDashboard();
+            if (isGeneratingForPublicProject) {
+                await saveGeneratedCardsToPublicProject(projectId, cards);
+                closeModal('aiModal');
+                showNotification(`Successfully imported ${cards.length} cards!`, 'success');
+                await loadPublicProjectCards(projectId);
+                openModal('publicCardsModal');
+                isGeneratingForPublicProject = false;
+            } else {
+                await saveGeneratedCards(projectId, cards);
+                closeModal('aiModal');
+                showNotification(`Successfully imported ${cards.length} cards!`, 'success');
+                await loadCards();
+                updateDashboard();
+            }
 
             // Reset manual tab
             document.getElementById('manualTextInput').value = '';
@@ -952,7 +1168,7 @@ function initAI() {
 
     // Import cards directly from JSON
     importJsonBtn.addEventListener('click', async () => {
-        const projectId = document.getElementById('aiProjectSelect').value;
+        const projectId = isGeneratingForPublicProject ? currentPublicProjectId : document.getElementById('aiProjectSelect').value;
         const jsonInput = document.getElementById('jsonInput').value.trim();
 
         if (!projectId) {
@@ -966,12 +1182,21 @@ function initAI() {
 
         try {
             const cards = parseAIResponse(jsonInput);
-            await saveGeneratedCards(projectId, cards);
 
-            closeModal('aiModal');
-            showNotification(`Successfully imported ${cards.length} cards!`, 'success');
-            await loadCards();
-            updateDashboard();
+            if (isGeneratingForPublicProject) {
+                await saveGeneratedCardsToPublicProject(projectId, cards);
+                closeModal('aiModal');
+                showNotification(`Successfully imported ${cards.length} cards!`, 'success');
+                await loadPublicProjectCards(projectId);
+                openModal('publicCardsModal');
+                isGeneratingForPublicProject = false;
+            } else {
+                await saveGeneratedCards(projectId, cards);
+                closeModal('aiModal');
+                showNotification(`Successfully imported ${cards.length} cards!`, 'success');
+                await loadCards();
+                updateDashboard();
+            }
 
             // Reset JSON tab
             document.getElementById('jsonInput').value = '';
@@ -1163,6 +1388,27 @@ async function saveGeneratedCards(projectId, cards) {
     }
 }
 
+// Save generated cards to public project
+async function saveGeneratedCardsToPublicProject(projectId, cards) {
+    const cardsRef = ref(window.db, `publicProjects/${projectId}/cards`);
+
+    for (const card of cards) {
+        const cardData = {
+            question: card.question,
+            options: card.options,
+            correctAnswer: card.correctAnswer,
+            explanation: card.explanation || '',
+            difficulty: card.difficulty || 'medium'
+        };
+        await push(cardsRef, cardData);
+    }
+
+    // Update card count
+    const snapshot = await get(cardsRef);
+    const totalCards = snapshot.exists() ? Object.keys(snapshot.val()).length : 0;
+    await updatePublicProjectCardCount(projectId, totalCards);
+}
+
 // API Key management
 function getAPIKey(provider) {
     return localStorage.getItem(`apiKey_${provider}`);
@@ -1173,6 +1419,56 @@ function setAPIKey(provider, key) {
         localStorage.setItem(`apiKey_${provider}`, key);
     } else {
         localStorage.removeItem(`apiKey_${provider}`);
+    }
+}
+
+// Generation limits for Pro users
+async function checkGenerationLimit() {
+    if (!currentUser) return false;
+
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        const countRef = ref(window.db, `users/${currentUser.uid}/generations/${today}/count`);
+        const snapshot = await get(countRef);
+        const count = snapshot.exists() ? snapshot.val() : 0;
+
+        return count < 5; // 5 generations per day for Pro users
+    } catch (error) {
+        console.error('Error checking generation limit:', error);
+        return false;
+    }
+}
+
+async function incrementGenerationCount() {
+    if (!currentUser) return;
+
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        const countRef = ref(window.db, `users/${currentUser.uid}/generations/${today}`);
+        const snapshot = await get(countRef);
+        const currentCount = snapshot.exists() && snapshot.val().count ? snapshot.val().count : 0;
+
+        await set(countRef, {
+            count: currentCount + 1,
+            lastGeneratedAt: Date.now()
+        });
+    } catch (error) {
+        console.error('Error incrementing generation count:', error);
+    }
+}
+
+async function getRemainingGenerations() {
+    if (!currentUser || !isProUser || isDevUser || isAdminUser) return null;
+
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        const countRef = ref(window.db, `users/${currentUser.uid}/generations/${today}/count`);
+        const snapshot = await get(countRef);
+        const count = snapshot.exists() ? snapshot.val() : 0;
+
+        return 5 - count;
+    } catch (error) {
+        return 5;
     }
 }
 
@@ -1506,19 +1802,30 @@ function initModals() {
     });
 }
 
-function openModal(modalId) {
+window.openModal = function(modalId) {
     document.getElementById(modalId).classList.remove('hidden');
 }
 
-function closeModal(modalId) {
+window.closeModal = function(modalId) {
     document.getElementById(modalId).classList.add('hidden');
+
+    // Reset public project generation flag and show project selector again
+    if (modalId === 'aiModal' && isGeneratingForPublicProject) {
+        isGeneratingForPublicProject = false;
+        const projectSelectGroup = document.getElementById('aiProjectSelect')?.closest('.form-group');
+        if (projectSelectGroup) {
+            projectSelectGroup.style.display = 'block';
+        }
+        // Reopen the manage cards modal
+        openModal('publicCardsModal');
+    }
 }
 
 // ============================================
 // UTILITIES
 // ============================================
 
-function showNotification(message, type = 'info') {
+window.showNotification = function(message, type = 'info') {
     // Remove any existing notifications
     const existing = document.querySelectorAll('.notification');
     existing.forEach(n => n.remove());
@@ -1570,214 +1877,6 @@ function shuffleArray(array) {
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
     return shuffled;
-}
-
-// ============================================
-// STUDY MODE
-// ============================================
-
-function initStudy() {
-    const startStudyBtn = document.getElementById('startStudyBtn');
-    const endStudyBtn = document.getElementById('endStudyBtn');
-    const prevCardBtn = document.getElementById('prevCardBtn');
-    const nextCardBtn = document.getElementById('nextCardBtn');
-    const studyCard = document.getElementById('studyCard');
-    const studyProjectSelect = document.getElementById('studyProjectSelect');
-
-    // Update study project select when projects load
-    updateProjectSelects();
-
-    startStudyBtn.addEventListener('click', startStudySession);
-    endStudyBtn.addEventListener('click', endStudySession);
-    prevCardBtn.addEventListener('click', () => navigateStudyCard(-1));
-    nextCardBtn.addEventListener('click', () => navigateStudyCard(1));
-
-    // Swipe and tap support
-    let touchStartX = 0;
-    let touchStartY = 0;
-    let touchEndX = 0;
-    let touchEndY = 0;
-    let touchStartTime = 0;
-    let isSwiping = false;
-
-    studyCard.addEventListener('touchstart', (e) => {
-        touchStartX = e.changedTouches[0].screenX;
-        touchStartY = e.changedTouches[0].screenY;
-        touchStartTime = Date.now();
-        isSwiping = false;
-    }, false);
-
-    studyCard.addEventListener('touchmove', (e) => {
-        const currentX = e.changedTouches[0].screenX;
-        const currentY = e.changedTouches[0].screenY;
-        const diffX = Math.abs(currentX - touchStartX);
-        const diffY = Math.abs(currentY - touchStartY);
-
-        // If horizontal movement is greater than vertical, consider it a swipe
-        if (diffX > 10 && diffX > diffY) {
-            isSwiping = true;
-        }
-    }, false);
-
-    studyCard.addEventListener('touchend', (e) => {
-        touchEndX = e.changedTouches[0].screenX;
-        touchEndY = e.changedTouches[0].screenY;
-        const touchDuration = Date.now() - touchStartTime;
-
-        if (isSwiping) {
-            handleSwipe();
-        } else if (touchDuration < 300) {
-            // Short tap without swipe - flip the card
-            toggleCardFlip();
-        }
-    }, false);
-
-    // Card flip on click (desktop)
-    studyCard.addEventListener('click', (e) => {
-        // Only flip if not during a touch interaction
-        if (touchStartTime === 0 || Date.now() - touchStartTime > 500) {
-            toggleCardFlip();
-        }
-    });
-
-    function handleSwipe() {
-        const swipeThreshold = 50;
-        const diffX = touchStartX - touchEndX;
-        const diffY = Math.abs(touchStartY - touchEndY);
-
-        // Only consider it a swipe if horizontal movement dominates
-        if (Math.abs(diffX) > swipeThreshold && Math.abs(diffX) > diffY * 2) {
-            if (diffX > 0) {
-                // Swiped left - next card
-                navigateStudyCard(1);
-            } else {
-                // Swiped right - previous card
-                navigateStudyCard(-1);
-            }
-        }
-    }
-}
-
-function startStudySession() {
-    const projectId = document.getElementById('studyProjectSelect').value;
-    const randomOrder = document.getElementById('studyRandomOrder').checked;
-
-    if (!projectId) {
-        showNotification('Please select a project', 'error');
-        return;
-    }
-
-    let studyCards = cards.filter(c => c.projectId === projectId);
-
-    if (studyCards.length === 0) {
-        showNotification('This project has no cards', 'error');
-        return;
-    }
-
-    if (randomOrder) {
-        studyCards = shuffleArray([...studyCards]);
-    }
-
-    currentStudy = {
-        cards: studyCards,
-        currentIndex: 0
-    };
-
-    document.getElementById('studySetup').classList.add('hidden');
-    document.getElementById('studyActive').classList.remove('hidden');
-    document.getElementById('totalStudyCards').textContent = studyCards.length;
-
-    showStudyCard();
-}
-
-function showStudyCard(animationDirection = null) {
-    if (!currentStudy) return;
-
-    const card = currentStudy.cards[currentStudy.currentIndex];
-    const studyCard = document.getElementById('studyCard');
-
-    // Function to update card content
-    const updateCardContent = () => {
-        // Remove flipped class to show question side
-        studyCard.classList.remove('flipped');
-
-        // Update content
-        document.getElementById('studyQuestion').textContent = card.question;
-
-        // Find the correct answer text
-        const correctAnswerText = card.options[card.correctAnswer];
-        document.getElementById('studyAnswer').textContent = correctAnswerText;
-
-        // Set explanation
-        const explanationEl = document.getElementById('studyExplanation');
-        if (card.explanation) {
-            explanationEl.innerHTML = `<strong>Explanation:</strong> ${escapeHtml(card.explanation)}`;
-        } else {
-            explanationEl.innerHTML = '';
-        }
-
-        // Update progress
-        document.getElementById('currentStudyCard').textContent = currentStudy.currentIndex + 1;
-
-        // Update navigation buttons
-        document.getElementById('prevCardBtn').disabled = currentStudy.currentIndex === 0;
-        document.getElementById('nextCardBtn').disabled = currentStudy.currentIndex === currentStudy.cards.length - 1;
-    };
-
-    // If animation is specified, animate the transition
-    if (animationDirection) {
-        // Remove any existing animation classes
-        studyCard.classList.remove('swipe-out-left', 'swipe-out-right', 'swipe-in-left', 'swipe-in-right');
-
-        // Apply exit animation
-        const exitClass = animationDirection === 1 ? 'swipe-out-left' : 'swipe-out-right';
-        studyCard.classList.add(exitClass);
-
-        // Wait for exit animation to complete
-        setTimeout(() => {
-            // Update content while card is off-screen
-            updateCardContent();
-
-            // Remove exit animation and apply enter animation
-            studyCard.classList.remove(exitClass);
-            const enterClass = animationDirection === 1 ? 'swipe-in-right' : 'swipe-in-left';
-            studyCard.classList.add(enterClass);
-
-            // Remove enter animation class after it completes
-            setTimeout(() => {
-                studyCard.classList.remove(enterClass);
-            }, 400);
-        }, 400);
-    } else {
-        // No animation, just update content
-        updateCardContent();
-    }
-}
-
-function toggleCardFlip() {
-    const studyCard = document.getElementById('studyCard');
-    studyCard.classList.toggle('flipped');
-}
-
-function navigateStudyCard(direction) {
-    if (!currentStudy) return;
-
-    const newIndex = currentStudy.currentIndex + direction;
-
-    if (newIndex >= 0 && newIndex < currentStudy.cards.length) {
-        currentStudy.currentIndex = newIndex;
-        showStudyCard(direction);
-    }
-}
-
-function endStudySession() {
-    if (!confirm('Are you sure you want to end the study session?')) {
-        return;
-    }
-
-    currentStudy = null;
-    document.getElementById('studyActive').classList.add('hidden');
-    document.getElementById('studySetup').classList.remove('hidden');
 }
 
 // ============================================
@@ -1875,7 +1974,6 @@ function renderExplore() {
             </div>
             <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
                 <button class="btn btn-primary" onclick="window.startPublicQuiz('${p.id}')"><i class="fas fa-play"></i> Take Quiz</button>
-                <button class="btn btn-secondary" onclick="window.showLeaderboard('${p.id}')"><i class="fas fa-trophy"></i> Leaderboard</button>
             </div>
         </div>
     `).join('');
@@ -1915,12 +2013,18 @@ async function loadDevProjects() {
                         <div class="project-stats">${p.cardCount || 0} cards • ${p.totalAttempts || 0} attempts</div>
                     </div>
                     <div class="project-actions">
+                        <button class="project-action-btn" onclick="window.managePublicCards('${p.id}')" title="Manage Cards"><i class="fas fa-layer-group"></i></button>
                         <button class="project-action-btn" onclick="window.editPublicProject('${p.id}')"><i class="fas fa-edit"></i></button>
                         <button class="project-action-btn" onclick="window.togglePublish('${p.id}', ${!p.published})"><i class="fas fa-${p.published ? 'eye-slash' : 'eye'}"></i></button>
                         <button class="project-action-btn" onclick="window.deletePublicProject('${p.id}')"><i class="fas fa-trash"></i></button>
                     </div>
                 </div>
                 <p style="color: var(--text-secondary); margin-top: 0.5rem;">Avg Score: ${p.averageScore || 0}%</p>
+                <div style="margin-top: 0.5rem;">
+                    <button class="btn btn-sm btn-primary" onclick="window.managePublicCards('${p.id}')">
+                        <i class="fas fa-layer-group"></i> Manage Cards
+                    </button>
+                </div>
             </div>
         `).join('');
     } catch (error) {
@@ -2032,6 +2136,213 @@ window.deletePublicProject = async function(id) {
 };
 
 // ============================================
+// PUBLIC PROJECT CARDS MANAGEMENT
+// ============================================
+
+let currentPublicProjectId = null;
+let editingPublicCardId = null;
+
+window.managePublicCards = async function(projectId) {
+    currentPublicProjectId = projectId;
+    const project = publicProjects.find(p => p.id === projectId);
+
+    if (!project) return;
+
+    document.getElementById('publicCardsModalTitle').textContent = `Manage Cards - ${project.name}`;
+    openModal('publicCardsModal');
+    await loadPublicProjectCards(projectId);
+};
+
+async function loadPublicProjectCards(projectId) {
+    try {
+        const cardsRef = ref(window.db, `publicProjects/${projectId}/cards`);
+        const snapshot = await get(cardsRef);
+        const cardsList = document.getElementById('publicCardsList');
+
+        if (!snapshot.exists()) {
+            cardsList.innerHTML = '<div class="empty-state"><i class="fas fa-layer-group"></i><p>No cards yet. Add your first card!</p></div>';
+            return;
+        }
+
+        const cardsData = snapshot.val();
+        const cards = Object.keys(cardsData).map(key => ({ id: key, ...cardsData[key] }));
+
+        cardsList.innerHTML = cards.map((card, idx) => `
+            <div class="card-item" style="margin-bottom: 1rem;">
+                <div style="display: flex; justify-content: space-between; align-items: start;">
+                    <div style="flex: 1;">
+                        <div class="card-question">${idx + 1}. ${escapeHtml(card.question)}</div>
+                        <div class="card-options" style="margin-top: 0.5rem;">
+                            ${card.options.map((opt, i) => `
+                                <div class="card-option ${i === card.correctAnswer ? 'correct' : ''}">
+                                    ${String.fromCharCode(65 + i)}) ${escapeHtml(opt)} ${i === card.correctAnswer ? '✓' : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                        ${card.explanation ? `<p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;"><strong>Explanation:</strong> ${escapeHtml(card.explanation)}</p>` : ''}
+                        ${getDifficultyBadge(card.difficulty || 'medium')}
+                    </div>
+                    <div style="display: flex; gap: 0.25rem; margin-left: 1rem;">
+                        <button class="icon-btn" onclick="window.editPublicCard('${card.id}')" title="Edit">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="icon-btn" onclick="window.deletePublicCard('${card.id}')" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+        // Update card count
+        await updatePublicProjectCardCount(projectId, cards.length);
+    } catch (error) {
+        console.error('Error loading cards:', error);
+        showNotification('Error loading cards', 'error');
+    }
+}
+
+async function updatePublicProjectCardCount(projectId, count) {
+    try {
+        await update(ref(window.db, `publicProjects/${projectId}`), { cardCount: count });
+        // Reload projects to update UI
+        await loadPublicProjects();
+    } catch (error) {
+        console.error('Error updating card count:', error);
+    }
+}
+
+function initPublicCardsManagement() {
+    const addBtn = document.getElementById('addPublicCardBtn');
+    const generateBtn = document.getElementById('generatePublicCardsBtn');
+    const saveBtn = document.getElementById('savePublicCardBtn');
+
+    if (addBtn) {
+        addBtn.addEventListener('click', () => {
+            editingPublicCardId = null;
+            document.getElementById('editPublicCardTitle').textContent = 'Add Card';
+            document.getElementById('publicCardQuestion').value = '';
+            document.getElementById('publicOption0').value = '';
+            document.getElementById('publicOption1').value = '';
+            document.getElementById('publicOption2').value = '';
+            document.getElementById('publicOption3').value = '';
+            document.getElementById('publicCardExplanation').value = '';
+            document.getElementById('publicCardDifficulty').value = 'medium';
+            document.querySelector('input[name="publicCorrectAnswer"][value="0"]').checked = true;
+            openModal('editPublicCardModal');
+        });
+    }
+
+    if (generateBtn) {
+        generateBtn.addEventListener('click', () => {
+            // Close the manage cards modal first to avoid layering issues
+            closeModal('publicCardsModal');
+
+            // Set flag to indicate we're generating for a public project
+            isGeneratingForPublicProject = true;
+
+            // Hide the project selector since we already know which project
+            const projectSelectGroup = document.getElementById('aiProjectSelect')?.closest('.form-group');
+            if (projectSelectGroup) {
+                projectSelectGroup.style.display = 'none';
+            }
+
+            // Open AI modal
+            openModal('aiModal');
+        });
+    }
+
+    if (saveBtn) {
+        saveBtn.addEventListener('click', async () => {
+            const question = document.getElementById('publicCardQuestion').value.trim();
+            const options = [
+                document.getElementById('publicOption0').value.trim(),
+                document.getElementById('publicOption1').value.trim(),
+                document.getElementById('publicOption2').value.trim(),
+                document.getElementById('publicOption3').value.trim()
+            ];
+            const correctAnswer = parseInt(document.querySelector('input[name="publicCorrectAnswer"]:checked').value);
+            const explanation = document.getElementById('publicCardExplanation').value.trim();
+            const difficulty = document.getElementById('publicCardDifficulty').value;
+
+            if (!question) {
+                showNotification('Please enter a question', 'error');
+                return;
+            }
+
+            if (options.some(opt => !opt)) {
+                showNotification('Please fill in all options', 'error');
+                return;
+            }
+
+            try {
+                const cardData = {
+                    question,
+                    options,
+                    correctAnswer,
+                    explanation,
+                    difficulty
+                };
+
+                if (editingPublicCardId) {
+                    await set(ref(window.db, `publicProjects/${currentPublicProjectId}/cards/${editingPublicCardId}`), cardData);
+                    showNotification('Card updated!', 'success');
+                } else {
+                    await push(ref(window.db, `publicProjects/${currentPublicProjectId}/cards`), cardData);
+                    showNotification('Card added!', 'success');
+                }
+
+                closeModal('editPublicCardModal');
+                await loadPublicProjectCards(currentPublicProjectId);
+            } catch (error) {
+                console.error('Error saving card:', error);
+                showNotification('Error saving card', 'error');
+            }
+        });
+    }
+}
+
+window.editPublicCard = async function(cardId) {
+    try {
+        const cardRef = ref(window.db, `publicProjects/${currentPublicProjectId}/cards/${cardId}`);
+        const snapshot = await get(cardRef);
+
+        if (!snapshot.exists()) return;
+
+        const card = snapshot.val();
+        editingPublicCardId = cardId;
+
+        document.getElementById('editPublicCardTitle').textContent = 'Edit Card';
+        document.getElementById('publicCardQuestion').value = card.question;
+        document.getElementById('publicOption0').value = card.options[0];
+        document.getElementById('publicOption1').value = card.options[1];
+        document.getElementById('publicOption2').value = card.options[2];
+        document.getElementById('publicOption3').value = card.options[3];
+        document.getElementById('publicCardExplanation').value = card.explanation || '';
+        document.getElementById('publicCardDifficulty').value = card.difficulty || 'medium';
+        document.querySelector(`input[name="publicCorrectAnswer"][value="${card.correctAnswer}"]`).checked = true;
+
+        openModal('editPublicCardModal');
+    } catch (error) {
+        console.error('Error loading card:', error);
+        showNotification('Error loading card', 'error');
+    }
+};
+
+window.deletePublicCard = async function(cardId) {
+    if (!confirm('Delete this card?')) return;
+
+    try {
+        await remove(ref(window.db, `publicProjects/${currentPublicProjectId}/cards/${cardId}`));
+        showNotification('Card deleted', 'success');
+        await loadPublicProjectCards(currentPublicProjectId);
+    } catch (error) {
+        console.error('Error deleting card:', error);
+        showNotification('Error deleting card', 'error');
+    }
+};
+
+// ============================================
 // PUBLIC QUIZ TAKING
 // ============================================
 
@@ -2047,7 +2358,13 @@ window.startPublicQuiz = async function(projectId) {
         }
 
         const cardsData = cardsSnapshot.val();
-        const quizCards = Object.keys(cardsData).map(key => ({ id: key, ...cardsData[key] }));
+        // Remove correctAnswer from client-side data for security
+        const quizCards = Object.keys(cardsData).map(key => {
+            const card = { ...cardsData[key] };
+            delete card.correctAnswer; // Don't send answers to client
+            delete card.explanation; // Don't send explanation until answered
+            return { id: key, ...card };
+        });
 
         currentPublicQuiz = {
             projectId,
@@ -2055,7 +2372,8 @@ window.startPublicQuiz = async function(projectId) {
             cards: shuffleArray(quizCards),
             currentIndex: 0,
             score: 0,
-            startTime: Date.now()
+            startTime: Date.now(),
+            answers: [] // Track user answers
         };
 
         document.getElementById('publicQuizTitle').textContent = project.name;
@@ -2096,23 +2414,55 @@ function showPublicQuestion() {
     `;
 }
 
-window.selectPublicAnswer = function(selectedIdx) {
+window.selectPublicAnswer = async function(selectedIdx) {
     const card = currentPublicQuiz.cards[currentPublicQuiz.currentIndex];
-    const isCorrect = selectedIdx === card.correctAnswer;
     const buttons = document.querySelectorAll('#publicAnswersList .answer-btn');
     const feedback = document.getElementById('publicFeedback');
 
-    buttons.forEach((btn, idx) => {
-        btn.disabled = true;
-        if (idx === card.correctAnswer) btn.classList.add('correct');
-        else if (idx === selectedIdx && !isCorrect) btn.classList.add('incorrect');
-    });
+    // Disable buttons immediately
+    buttons.forEach(btn => btn.disabled = true);
 
-    if (isCorrect) currentPublicQuiz.score++;
+    // Show loading state
+    feedback.innerHTML = '<div class="spinner" style="width: 20px; height: 20px;"></div>';
 
-    feedback.classList.add(isCorrect ? 'correct' : 'incorrect');
-    feedback.innerHTML = `<strong>${isCorrect ? 'Correct!' : 'Incorrect'}</strong>${card.explanation ? `<p style="margin-top: 0.5rem;">${escapeHtml(card.explanation)}</p>` : ''}`;
-    document.getElementById('nextPublicQuestionBtn').classList.remove('hidden');
+    try {
+        // Validate answer on server
+        const response = await fetch('https://quizapp2-eight.vercel.app/api/validate-answer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                projectId: currentPublicQuiz.projectId,
+                cardId: card.id,
+                selectedAnswer: selectedIdx
+            })
+        });
+
+        const result = await response.json();
+        const isCorrect = result.isCorrect;
+
+        // Store answer
+        currentPublicQuiz.answers.push({
+            cardId: card.id,
+            selectedAnswer: selectedIdx,
+            isCorrect
+        });
+
+        // Show correct/incorrect styling
+        buttons.forEach((btn, idx) => {
+            if (idx === result.correctAnswer) btn.classList.add('correct');
+            else if (idx === selectedIdx && !isCorrect) btn.classList.add('incorrect');
+        });
+
+        if (isCorrect) currentPublicQuiz.score++;
+
+        feedback.classList.add(isCorrect ? 'correct' : 'incorrect');
+        feedback.innerHTML = `<strong>${isCorrect ? 'Correct!' : 'Incorrect'}</strong>${result.explanation ? `<p style="margin-top: 0.5rem;">${escapeHtml(result.explanation)}</p>` : ''}`;
+        document.getElementById('nextPublicQuestionBtn').classList.remove('hidden');
+    } catch (error) {
+        console.error('Error validating answer:', error);
+        feedback.innerHTML = '<strong style="color: var(--danger);">Error validating answer. Please try again.</strong>';
+        buttons.forEach(btn => btn.disabled = false);
+    }
 };
 
 window.nextPublicQuestion = function() {
@@ -2158,8 +2508,7 @@ async function showPublicQuizResults() {
                 <div class="score-percentage">${percentage}%</div>
             </div>
             <div class="results-actions">
-                <button class="btn btn-primary" onclick="window.showLeaderboard('${currentPublicQuiz.projectId}')"><i class="fas fa-trophy"></i> View Leaderboard</button>
-                <button class="btn btn-secondary" onclick="window.closePublicQuiz()">Close</button>
+                <button class="btn btn-primary" onclick="window.closePublicQuiz()">Close</button>
             </div>
         </div>
     `;
@@ -2229,36 +2578,186 @@ function initAdminConsole() {
             tabs.forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
             document.querySelectorAll('.admin-tab-content').forEach(c => c.classList.remove('active'));
-            document.getElementById(tab.dataset.tab + 'Tab').classList.add('active');
+
+            const targetTab = document.getElementById(tab.dataset.tab + 'Tab');
+            if (targetTab) {
+                targetTab.classList.add('active');
+            }
+
             if (tab.dataset.tab === 'analytics') loadAdminAnalytics();
+            if (tab.dataset.tab === 'devs') loadDevManagement();
+            if (tab.dataset.tab === 'projects') (async () => await loadProjectsManagement())();
+            if (tab.dataset.tab === 'users') loadAllUsers();
         });
     });
 
     const searchBtn = document.getElementById('searchUsersBtn');
+    const searchInput = document.getElementById('adminUserSearch');
+
     if (searchBtn) {
         searchBtn.addEventListener('click', searchUsers);
     }
+
+    if (searchInput) {
+        searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                searchUsers();
+            }
+        });
+    }
+
+    // Load all users by default
+    setTimeout(() => {
+        if (isAdminUser) loadAllUsers();
+    }, 500);
 }
 
-async function loadAdminAnalytics() {
+async function loadDevManagement() {
     if (!isAdminUser) return;
+
     try {
         const usersSnapshot = await get(ref(window.db, 'users'));
-        const users = usersSnapshot.exists() ? Object.values(usersSnapshot.val()) : [];
+        if (!usersSnapshot.exists()) return;
 
-        document.getElementById('totalUsers').textContent = users.length;
-        document.getElementById('totalProUsers').textContent = users.filter(u => u.isPro).length;
-        document.getElementById('totalDevUsers').textContent = users.filter(u => u.isDev).length;
-        document.getElementById('totalPublicProjects').textContent = publicProjects.length;
+        const devUsers = Object.entries(usersSnapshot.val()).filter(([uid, data]) => data.isDev);
+        const list = document.getElementById('adminDevsList');
+
+        if (devUsers.length === 0) {
+            list.innerHTML = '<div class="empty-state"><i class="fas fa-user-cog"></i><p>No dev users yet</p></div>';
+            return;
+        }
+
+        list.innerHTML = devUsers.map(([uid, data]) => {
+            const userProjects = publicProjects.filter(p => p.createdBy === uid);
+            return `
+                <div class="account-section" style="margin-bottom: 1rem;">
+                    <h4>${escapeHtml(data.email || uid)}</h4>
+                    <p style="color: var(--text-muted); font-size: 0.875rem;">UID: ${uid}</p>
+                    <p>Public Projects: ${userProjects.length} | Pro: ${data.isPro ? '✅' : '❌'} | Admin: ${data.isAdmin ? '✅' : '❌'}</p>
+                    <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                        <button class="btn btn-secondary" onclick="window.viewDevProjects('${uid}')"><i class="fas fa-folder"></i> View Projects</button>
+                        <button class="btn btn-danger" onclick="window.toggleUserStatus('${uid}', 'isDev', false)"><i class="fas fa-times"></i> Revoke Dev</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
     } catch (error) {
-        console.error('Error loading analytics:', error);
+        console.error('Error loading dev management:', error);
+    }
+}
+
+async function loadProjectsManagement() {
+    if (!isAdminUser) return;
+
+    const list = document.getElementById('adminProjectsList');
+
+    // Ensure public projects are loaded
+    if (publicProjects.length === 0) {
+        await loadPublicProjects();
+    }
+
+    if (publicProjects.length === 0) {
+        list.innerHTML = '<div class="empty-state"><i class="fas fa-folder-open"></i><p>No public projects yet</p></div>';
+        return;
+    }
+
+    list.innerHTML = `
+        <div style="margin-bottom: 1rem;">
+            <input type="text" id="projectSearchInput" class="text-input" placeholder="Search projects..." style="max-width: 400px;">
+        </div>
+        ${publicProjects.map(p => `
+            <div class="account-section" style="margin-bottom: 1rem;">
+                <h4>${escapeHtml(p.name)} ${p.published ? '✅ Published' : '📝 Draft'}</h4>
+                <p style="color: var(--text-muted); font-size: 0.875rem;">
+                    By: ${escapeHtml(p.creatorName)} | Category: ${p.category} | Difficulty: ${p.difficulty}
+                </p>
+                <p>Cards: ${p.cardCount || 0} | Attempts: ${p.totalAttempts || 0} | Avg Score: ${p.averageScore || 0}%</p>
+                <p style="font-size: 0.875rem;">${escapeHtml(p.description || '')}</p>
+                <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap;">
+                    <button class="btn btn-secondary" onclick="window.editPublicProject('${p.id}')"><i class="fas fa-edit"></i> Edit</button>
+                    <button class="btn btn-secondary" onclick="window.togglePublish('${p.id}', ${!p.published})">
+                        <i class="fas fa-${p.published ? 'eye-slash' : 'eye'}"></i> ${p.published ? 'Unpublish' : 'Publish'}
+                    </button>
+                    <button class="btn btn-danger" onclick="window.deletePublicProject('${p.id}')"><i class="fas fa-trash"></i> Delete</button>
+                </div>
+            </div>
+        `).join('')}
+    `;
+
+    // Add search functionality
+    const searchInput = document.getElementById('projectSearchInput');
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            const sections = document.querySelectorAll('#adminProjectsList .account-section');
+            sections.forEach(section => {
+                const text = section.textContent.toLowerCase();
+                section.style.display = text.includes(query) ? 'block' : 'none';
+            });
+        });
+    }
+}
+
+window.viewDevProjects = function(uid) {
+    const userProjects = publicProjects.filter(p => p.createdBy === uid);
+
+    if (userProjects.length === 0) {
+        showNotification('This dev has no public projects', 'info');
+        return;
+    }
+
+    const content = `
+        <div style="max-height: 400px; overflow-y: auto;">
+            ${userProjects.map(p => `
+                <div style="padding: 1rem; margin-bottom: 0.5rem; background: var(--surface-light); border-radius: var(--radius-md);">
+                    <h4 style="margin: 0 0 0.5rem 0;">${escapeHtml(p.name)} ${p.published ? '✅' : '📝'}</h4>
+                    <p style="color: var(--text-secondary); font-size: 0.875rem; margin: 0;">
+                        ${p.cardCount || 0} cards • ${p.totalAttempts || 0} attempts • ${p.averageScore || 0}% avg
+                    </p>
+                </div>
+            `).join('')}
+        </div>
+    `;
+
+    // Show in a simple alert for now (you can make a proper modal later)
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.innerHTML = `
+        <div class="modal-backdrop" onclick="this.parentElement.remove()"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Developer's Projects</h3>
+                <button class="modal-close" onclick="this.closest('.modal').remove()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">${content}</div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+};
+
+async function loadAllUsers() {
+    if (!isAdminUser) return;
+
+    try {
+        const usersSnapshot = await get(ref(window.db, 'users'));
+        if (!usersSnapshot.exists()) {
+            document.getElementById('adminUsersList').innerHTML = '<div class="empty-state"><i class="fas fa-users"></i><p>No users found</p></div>';
+            return;
+        }
+
+        const users = Object.entries(usersSnapshot.val());
+        renderUserList(users);
+    } catch (error) {
+        console.error('Error loading users:', error);
+        showNotification('Error loading users', 'error');
     }
 }
 
 async function searchUsers() {
     const query = document.getElementById('adminUserSearch').value.trim().toLowerCase();
+
     if (!query) {
-        showNotification('Enter a search term', 'error');
+        loadAllUsers();
         return;
     }
 
@@ -2270,39 +2769,451 @@ async function searchUsers() {
             uid.toLowerCase().includes(query) || (data.email && data.email.toLowerCase().includes(query))
         );
 
-        const list = document.getElementById('adminUsersList');
         if (users.length === 0) {
-            list.innerHTML = '<div class="empty-state"><i class="fas fa-users"></i><p>No users found</p></div>';
+            document.getElementById('adminUsersList').innerHTML = '<div class="empty-state"><i class="fas fa-users"></i><p>No users found</p></div>';
             return;
         }
 
-        list.innerHTML = users.map(([uid, data]) => `
-            <div class="account-section" style="margin-bottom: 1rem;">
-                <h4>${escapeHtml(data.email || uid)}</h4>
-                <p style="color: var(--text-muted); font-size: 0.875rem;">UID: ${uid}</p>
-                <p>Pro: ${data.isPro ? '✅' : '❌'} | Dev: ${data.isDev ? '✅' : '❌'} | Admin: ${data.isAdmin ? '✅' : '❌'} | Banned: ${data.isBanned ? '✅' : '❌'}</p>
-                <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
-                    <button class="btn btn-secondary" onclick="window.toggleUserStatus('${uid}', 'isPro', ${!data.isPro})">Toggle Pro</button>
-                    <button class="btn btn-secondary" onclick="window.toggleUserStatus('${uid}', 'isDev', ${!data.isDev})">Toggle Dev</button>
-                    <button class="btn btn-danger" onclick="window.toggleUserStatus('${uid}', 'isBanned', ${!data.isBanned})">${data.isBanned ? 'Unban' : 'Ban'}</button>
-                </div>
-            </div>
-        `).join('');
+        renderUserList(users);
     } catch (error) {
         console.error('Error searching users:', error);
         showNotification('Error searching users', 'error');
     }
 }
 
-window.toggleUserStatus = async function(uid, field, value) {
+function renderUserList(users) {
+    const list = document.getElementById('adminUsersList');
+
+    list.innerHTML = users.map(([uid, data]) => {
+        const isCurrentUser = currentUser && uid === currentUser.uid;
+        const displayName = data.displayName || data.email?.split('@')[0] || 'Unknown User';
+        const streak = data.streak?.currentStreak || 0;
+        const maxStreak = data.streak?.maxStreak || 0;
+
+        return `
+            <div class="account-section" style="margin-bottom: 1rem; ${isCurrentUser ? 'border: 2px solid var(--primary);' : ''}">
+                <h4>
+                    ${escapeHtml(displayName)} ${isCurrentUser ? '(You)' : ''}
+                    ${streak > 0 ? `<span style="color: var(--warning); margin-left: 0.5rem;"><i class="fas fa-fire"></i> ${streak}</span>` : ''}
+                </h4>
+                <p style="color: var(--text-secondary); font-size: 0.875rem;">
+                    ${escapeHtml(data.email || 'No email')} • UID: ${uid}
+                </p>
+                <p style="font-size: 0.875rem;">
+                    Pro: ${data.isPro ? '✅' : '❌'} | Dev: ${data.isDev ? '✅' : '❌'} | Admin: ${data.isAdmin ? '✅' : '❌'} | Banned: ${data.isBanned ? '✅' : '❌'}
+                    ${maxStreak > 0 ? `| Max Streak: ${maxStreak} <i class="fas fa-fire"></i>` : ''}
+                </p>
+                <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap;">
+                    <button class="btn btn-secondary" onclick="window.toggleUserStatus('${uid}', 'isPro', ${!data.isPro}, ${isCurrentUser})">
+                        <i class="fas fa-crown"></i> ${data.isPro ? 'Remove' : 'Grant'} Pro
+                    </button>
+                    <button class="btn btn-secondary" onclick="window.toggleUserStatus('${uid}', 'isDev', ${!data.isDev}, ${isCurrentUser})">
+                        <i class="fas fa-tools"></i> ${data.isDev ? 'Remove' : 'Grant'} Dev
+                    </button>
+                    <button class="btn btn-secondary" onclick="window.toggleUserStatus('${uid}', 'isAdmin', ${!data.isAdmin}, ${isCurrentUser})">
+                        <i class="fas fa-shield-alt"></i> ${data.isAdmin ? 'Remove' : 'Grant'} Admin
+                    </button>
+                    <button class="btn btn-danger" onclick="window.toggleUserStatus('${uid}', 'isBanned', ${!data.isBanned}, ${isCurrentUser})">
+                        <i class="fas fa-ban"></i> ${data.isBanned ? 'Unban' : 'Ban'}
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+window.toggleUserStatus = async function(uid, field, value, isCurrentUser) {
+    // Prevent removing own dev/admin status
+    if (isCurrentUser && (field === 'isDev' || field === 'isAdmin') && !value) {
+        if (!confirm(`⚠️ Warning: You are about to remove your own ${field === 'isDev' ? 'Developer' : 'Administrator'} status. You will lose access to this panel. Are you absolutely sure?`)) {
+            return;
+        }
+    }
+
+    // Prevent banning yourself
+    if (isCurrentUser && field === 'isBanned' && value) {
+        showNotification('You cannot ban yourself!', 'error');
+        return;
+    }
+
     try {
         await update(ref(window.db, `users/${uid}`), { [field]: value });
-        showNotification('User updated', 'success');
-        searchUsers();
+        showNotification('User updated successfully', 'success');
+
+        // Reload the current view
+        const searchInput = document.getElementById('adminUserSearch');
+        if (searchInput && searchInput.value.trim()) {
+            searchUsers();
+        } else {
+            loadAllUsers();
+        }
+
+        // If you removed your own admin status, reload
+        if (isCurrentUser && field === 'isAdmin' && !value) {
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+        }
     } catch (error) {
-        showNotification('Error updating user', 'error');
+        console.error('Error updating user:', error);
+        showNotification('Error updating user: ' + error.message, 'error');
     }
 };
+
+// ============================================
+// STREAK TRACKING
+// ============================================
+
+async function updateDailyStreak(uid) {
+    if (!uid) return;
+
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        const streakRef = ref(window.db, `users/${uid}/streak`);
+        const snapshot = await get(streakRef);
+        const streakData = snapshot.exists() ? snapshot.val() : { currentStreak: 0, maxStreak: 0, lastLoginDate: null };
+
+        const lastLoginDate = streakData.lastLoginDate;
+
+        if (lastLoginDate !== today) {
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+            if (lastLoginDate === yesterdayStr) {
+                // Consecutive day - increment streak
+                streakData.currentStreak++;
+            } else if (lastLoginDate !== null) {
+                // Streak broken - reset
+                streakData.currentStreak = 1;
+            } else {
+                // First login
+                streakData.currentStreak = 1;
+            }
+
+            // Update max streak
+            if (streakData.currentStreak > (streakData.maxStreak || 0)) {
+                streakData.maxStreak = streakData.currentStreak;
+            }
+
+            streakData.lastLoginDate = today;
+            await set(streakRef, streakData);
+        }
+    } catch (error) {
+        console.error('Error updating streak:', error);
+    }
+}
+
+async function getUserStreak(uid) {
+    try {
+        const streakRef = ref(window.db, `users/${uid}/streak`);
+        const snapshot = await get(streakRef);
+        return snapshot.exists() ? snapshot.val() : { currentStreak: 0, maxStreak: 0 };
+    } catch (error) {
+        console.error('Error getting streak:', error);
+        return { currentStreak: 0, maxStreak: 0 };
+    }
+}
+
+// ============================================
+// ANALYTICS & CHARTS
+// ============================================
+
+let analyticsCharts = {};
+
+async function loadAdminAnalytics() {
+    if (!isAdminUser || !currentUser) {
+        console.log('Cannot load analytics - Admin status:', isAdminUser, 'User:', !!currentUser);
+        return;
+    }
+
+    try {
+        console.log('Loading admin analytics for user:', currentUser.uid);
+
+        const usersSnapshot = await get(ref(window.db, 'users'));
+
+        if (!usersSnapshot.exists()) {
+            console.log('No users data found');
+            return;
+        }
+
+        const users = Object.values(usersSnapshot.val());
+        console.log('Loaded', users.length, 'users');
+
+        // Calculate stats
+        const totalQuizAttempts = publicProjects.reduce((sum, p) => sum + (p.totalAttempts || 0), 0);
+        const avgStreak = users.reduce((sum, u) => sum + (u.streak?.currentStreak || 0), 0) / users.length;
+
+        // Update stat cards
+        const totalUsersEl = document.getElementById('totalUsers');
+        const totalProEl = document.getElementById('totalProUsers');
+        const totalDevEl = document.getElementById('totalDevUsers');
+        const totalProjectsEl = document.getElementById('totalPublicProjects');
+        const avgStreakEl = document.getElementById('avgStreak');
+        const totalQuizAttemptsEl = document.getElementById('totalQuizAttempts');
+
+        if (totalUsersEl) totalUsersEl.textContent = users.length;
+        if (totalProEl) totalProEl.textContent = users.filter(u => u.isPro).length;
+        if (totalDevEl) totalDevEl.textContent = users.filter(u => u.isDev).length;
+        if (totalProjectsEl) totalProjectsEl.textContent = publicProjects.length;
+        if (avgStreakEl) avgStreakEl.textContent = Math.round(avgStreak);
+        if (totalQuizAttemptsEl) totalQuizAttemptsEl.textContent = totalQuizAttempts;
+
+        // Load charts
+        await loadAnalyticsCharts(users);
+
+        // Load leaderboards
+        await loadTopStreaksLeaderboard(users);
+        await loadGlobalLeaderboard();
+
+        console.log('Analytics loaded successfully');
+    } catch (error) {
+        console.error('Error loading analytics:', error);
+        showNotification('Error loading analytics: ' + error.message, 'error');
+    }
+}
+
+async function loadAnalyticsCharts(users) {
+    // Destroy existing charts
+    Object.values(analyticsCharts).forEach(chart => chart?.destroy());
+    analyticsCharts = {};
+
+    // User Activity Chart (Last 7 Days)
+    const activityCanvas = document.getElementById('activityChart');
+    if (activityCanvas) {
+        const last7Days = Array.from({length: 7}, (_, i) => {
+            const date = new Date();
+            date.setDate(date.getDate() - (6 - i));
+            return date.toISOString().split('T')[0];
+        });
+
+        const activityData = last7Days.map(date => {
+            return users.filter(u => u.streak?.lastLoginDate === date).length;
+        });
+
+        analyticsCharts.activity = new Chart(activityCanvas, {
+            type: 'line',
+            data: {
+                labels: last7Days.map(d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
+                datasets: [{
+                    label: 'Active Users',
+                    data: activityData,
+                    borderColor: '#1db954',
+                    backgroundColor: 'rgba(29, 185, 84, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true, ticks: { color: '#9da7b3' }, grid: { color: '#3c4652' } },
+                    x: { ticks: { color: '#9da7b3' }, grid: { display: false } }
+                }
+            }
+        });
+    }
+
+    // User Type Distribution
+    const userTypeCanvas = document.getElementById('userTypeChart');
+    if (userTypeCanvas) {
+        const freeUsers = users.filter(u => !u.isPro && !u.isDev).length;
+        const proUsers = users.filter(u => u.isPro).length;
+        const devUsers = users.filter(u => u.isDev).length;
+
+        analyticsCharts.userType = new Chart(userTypeCanvas, {
+            type: 'doughnut',
+            data: {
+                labels: ['Free', 'Pro', 'Dev'],
+                datasets: [{
+                    data: [freeUsers, proUsers, devUsers],
+                    backgroundColor: ['#7c8591', '#ffd700', '#9d4edd']
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { labels: { color: '#9da7b3' } }
+                }
+            }
+        });
+    }
+
+    // Top Public Projects
+    const topProjectsCanvas = document.getElementById('topProjectsChart');
+    if (topProjectsCanvas) {
+        const topProjects = publicProjects
+            .filter(p => p.published)
+            .sort((a, b) => (b.totalAttempts || 0) - (a.totalAttempts || 0))
+            .slice(0, 5);
+
+        analyticsCharts.topProjects = new Chart(topProjectsCanvas, {
+            type: 'bar',
+            data: {
+                labels: topProjects.map(p => p.name.length > 20 ? p.name.substring(0, 20) + '...' : p.name),
+                datasets: [{
+                    label: 'Attempts',
+                    data: topProjects.map(p => p.totalAttempts || 0),
+                    backgroundColor: '#9d4edd'
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true, ticks: { color: '#9da7b3' }, grid: { color: '#3c4652' } },
+                    x: { ticks: { color: '#9da7b3' }, grid: { display: false } }
+                }
+            }
+        });
+    }
+
+    // Streak Distribution
+    const streaksCanvas = document.getElementById('streaksChart');
+    if (streaksCanvas) {
+        const streakRanges = { '0': 0, '1-3': 0, '4-7': 0, '8-14': 0, '15+': 0 };
+
+        users.forEach(u => {
+            const streak = u.streak?.currentStreak || 0;
+            if (streak === 0) streakRanges['0']++;
+            else if (streak <= 3) streakRanges['1-3']++;
+            else if (streak <= 7) streakRanges['4-7']++;
+            else if (streak <= 14) streakRanges['8-14']++;
+            else streakRanges['15+']++;
+        });
+
+        analyticsCharts.streaks = new Chart(streaksCanvas, {
+            type: 'bar',
+            data: {
+                labels: Object.keys(streakRanges),
+                datasets: [{
+                    label: 'Users',
+                    data: Object.values(streakRanges),
+                    backgroundColor: '#ffad66'
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true, ticks: { color: '#9da7b3' }, grid: { color: '#3c4652' } },
+                    x: { ticks: { color: '#9da7b3' }, grid: { display: false } }
+                }
+            }
+        });
+    }
+}
+
+async function loadTopStreaksLeaderboard(users) {
+    const topStreaks = users
+        .filter(u => u.streak?.maxStreak > 0)
+        .sort((a, b) => (b.streak?.maxStreak || 0) - (a.streak?.maxStreak || 0))
+        .slice(0, 10);
+
+    const content = document.getElementById('topStreaksLeaderboard');
+    if (!content) return;
+
+    if (topStreaks.length === 0) {
+        content.innerHTML = '<div class="empty-state"><i class="fas fa-fire"></i><p>No streaks yet</p></div>';
+        return;
+    }
+
+    content.innerHTML = `
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid var(--border);">
+                    <th style="padding: 0.75rem; text-align: left;">Rank</th>
+                    <th style="padding: 0.75rem; text-align: left;">User</th>
+                    <th style="padding: 0.75rem; text-align: center;">Current Streak</th>
+                    <th style="padding: 0.75rem; text-align: center;">Max Streak</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${topStreaks.map((u, idx) => `
+                    <tr style="border-bottom: 1px solid var(--border);">
+                        <td style="padding: 0.75rem; font-weight: 600;">${idx + 1}</td>
+                        <td style="padding: 0.75rem;">${escapeHtml(u.displayName || u.email?.split('@')[0] || 'Unknown')}</td>
+                        <td style="padding: 0.75rem; text-align: center; color: var(--warning);"><i class="fas fa-fire"></i> ${u.streak?.currentStreak || 0}</td>
+                        <td style="padding: 0.75rem; text-align: center; color: var(--primary);"><i class="fas fa-fire"></i> ${u.streak?.maxStreak || 0}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+async function loadGlobalLeaderboard() {
+    try {
+        // Get all users to fetch streak data
+        const usersSnapshot = await get(ref(window.db, 'users'));
+        const usersData = usersSnapshot.exists() ? usersSnapshot.val() : {};
+
+        const allResults = {};
+
+        // Aggregate quiz results
+        for (const project of publicProjects) {
+            const resultsSnapshot = await get(ref(window.db, `publicProjectResults/${project.id}`));
+            if (resultsSnapshot.exists()) {
+                const results = resultsSnapshot.val();
+                Object.entries(results).forEach(([uid, result]) => {
+                    if (!allResults[uid]) {
+                        const userData = usersData[uid] || {};
+                        allResults[uid] = {
+                            displayName: result.displayName,
+                            totalQuestions: 0,
+                            totalCorrect: 0,
+                            totalAttempts: 0,
+                            maxStreak: userData.streak?.maxStreak || 0
+                        };
+                    }
+                    allResults[uid].totalQuestions += result.total;
+                    allResults[uid].totalCorrect += result.score;
+                    allResults[uid].totalAttempts++;
+                });
+            }
+        }
+
+        const sortedUsers = Object.values(allResults)
+            .sort((a, b) => b.totalQuestions - a.totalQuestions || b.maxStreak - a.maxStreak)
+            .slice(0, 50);
+
+        const content = document.getElementById('globalLeaderboard');
+        if (!content) return;
+
+        if (sortedUsers.length === 0) {
+            content.innerHTML = '<div class="empty-state"><i class="fas fa-star"></i><p>No quiz results yet</p></div>';
+            return;
+        }
+
+        content.innerHTML = `
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="border-bottom: 2px solid var(--border);">
+                        <th style="padding: 0.75rem; text-align: left;">Rank</th>
+                        <th style="padding: 0.75rem; text-align: left;">User</th>
+                        <th style="padding: 0.75rem; text-align: center;">Questions Answered</th>
+                        <th style="padding: 0.75rem; text-align: center;">Correct</th>
+                        <th style="padding: 0.75rem; text-align: center;">Max Streak <i class="fas fa-fire"></i></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${sortedUsers.map((u, idx) => `
+                        <tr style="border-bottom: 1px solid var(--border);">
+                            <td style="padding: 0.75rem; font-weight: 600;">${idx + 1}</td>
+                            <td style="padding: 0.75rem;">${escapeHtml(u.displayName)}</td>
+                            <td style="padding: 0.75rem; text-align: center; font-weight: 600;">${u.totalQuestions}</td>
+                            <td style="padding: 0.75rem; text-align: center; color: var(--primary);">${u.totalCorrect}</td>
+                            <td style="padding: 0.75rem; text-align: center; color: var(--warning);">${u.maxStreak}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    } catch (error) {
+        console.error('Error loading global leaderboard:', error);
+    }
+}
 
 // ============================================
 // INITIALIZATION
@@ -2316,7 +3227,6 @@ document.addEventListener('DOMContentLoaded', () => {
         initProjects();
         initCards();
         initAI();
-        initStudy();
         initTest();
         initAccount();
         initModals();
@@ -2325,6 +3235,7 @@ document.addEventListener('DOMContentLoaded', () => {
         initExplore();
         initDevDashboard();
         initAdminConsole();
+        initPublicCardsManagement();
 
         // Load public projects after a short delay
         setTimeout(() => {
