@@ -493,30 +493,22 @@ function renderProjects() {
     }
 
     projectsList.innerHTML = projects.map(project => `
-        <div class="project-card" style="border-left-color: ${project.color || '#1db954'}">
+        <div class="project-card" style="border-left-color: ${project.color || '#1db954'}" onclick="window.openProjectDetail('${project.id}')">
             <div class="project-header">
                 <div>
                     <div class="project-title">${escapeHtml(project.name)}</div>
                     <div class="project-stats">${getProjectCardCount(project.id)} cards${project.studyCardsCount ? ` • ${project.studyCardsCount} study cards` : ''}</div>
                 </div>
-                <div class="project-actions">
-                    <button class="project-action-btn" onclick="window.generateStudyMaterials('${project.id}')" title="Generate Study Materials">
-                        <i class="fas fa-brain"></i>
-                    </button>
-                    <button class="project-action-btn" onclick="window.editProject('${project.id}')">
+                <div class="project-actions" onclick="event.stopPropagation()">
+                    <button class="project-action-btn" onclick="window.editProject('${project.id}')" title="Edit Project">
                         <i class="fas fa-edit"></i>
                     </button>
-                    <button class="project-action-btn" onclick="window.deleteProject('${project.id}')">
+                    <button class="project-action-btn" onclick="window.deleteProject('${project.id}')" title="Delete Project">
                         <i class="fas fa-trash"></i>
                     </button>
                 </div>
             </div>
             ${project.description ? `<p style="color: var(--text-secondary); margin-top: 0.5rem;">${escapeHtml(project.description)}</p>` : ''}
-            ${project.studyCards ? `
-                <button class="btn btn-primary" onclick="window.viewStudyMaterials('${project.id}')" style="margin-top: 0.5rem; width: 100%;">
-                    <i class="fas fa-brain"></i> View Study Materials
-                </button>
-            ` : ''}
         </div>
     `).join('');
 }
@@ -776,7 +768,8 @@ function initCards() {
     const projectFilter = document.getElementById('projectFilter');
     const difficultyFilter = document.getElementById('difficultyFilter');
 
-    createCardBtn.addEventListener('click', () => {
+    if (createCardBtn) {
+        createCardBtn.addEventListener('click', () => {
         editingCard = null;
         document.getElementById('cardModalTitle').textContent = 'Create Card';
         document.getElementById('cardProjectSelect').value = '';
@@ -789,9 +782,11 @@ function initCards() {
         document.getElementById('cardDifficultySelect').value = 'medium';
         document.querySelector('input[name="correctAnswer"]').checked = true;
         openModal('cardModal');
-    });
+        });
+    }
 
-    saveCardBtn.addEventListener('click', async () => {
+    if (saveCardBtn) {
+        saveCardBtn.addEventListener('click', async () => {
         const projectId = document.getElementById('cardProjectSelect').value;
         const question = document.getElementById('cardQuestionInput').value.trim();
         const options = [
@@ -846,9 +841,11 @@ function initCards() {
             console.error('Error saving card:', error);
             showNotification('Error saving card', 'error');
         }
-    });
+        });
+    }
 
-    generateCardsBtn.addEventListener('click', () => {
+    if (generateCardsBtn) {
+        generateCardsBtn.addEventListener('click', () => {
         openModal('aiModal');
         // Auto-select project after modal opens
         setTimeout(() => {
@@ -862,15 +859,20 @@ function initCards() {
                 }
             }
         }, 50);
-    });
+        });
+    }
 
-    projectFilter.addEventListener('change', () => {
-        renderCards();
-    });
+    if (projectFilter) {
+        projectFilter.addEventListener('change', () => {
+            renderCards();
+        });
+    }
 
-    difficultyFilter.addEventListener('change', () => {
-        renderCards();
-    });
+    if (difficultyFilter) {
+        difficultyFilter.addEventListener('change', () => {
+            renderCards();
+        });
+    }
 }
 
 window.editCard = async function(cardId) {

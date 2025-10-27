@@ -467,7 +467,24 @@ select:hover,
     padding: var(--spacing-lg);
     display: flex;
     flex-direction: column;
+    gap: var(--spacing-lg);
+    overflow-y: auto;
+}
+
+.nav-section {
+    display: flex;
+    flex-direction: column;
     gap: var(--spacing-sm);
+}
+
+.nav-section-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    padding: 0 1rem;
+    margin-bottom: var(--spacing-xs);
 }
 
 .nav-link {
@@ -2104,6 +2121,178 @@ select:hover,
 
 .public-project-card:hover {
     border-color: #9d4edd;
+}
+
+/* === PROJECT DETAIL PAGE === */
+.project-tabs {
+    display: flex;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-xl);
+    border-bottom: 2px solid var(--border);
+    background: var(--surface);
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    border: 1px solid var(--border);
+    border-bottom: none;
+}
+
+.project-tab {
+    flex: 1;
+    padding: var(--spacing-md) var(--spacing-lg);
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-base);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    margin-bottom: -2px;
+    font-size: 0.938rem;
+}
+
+.project-tab:hover {
+    color: var(--text-primary);
+    background: var(--surface-light);
+    border-radius: var(--radius-md);
+}
+
+.project-tab.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+    background: var(--surface-light);
+}
+
+.project-tab i {
+    font-size: 1.125rem;
+}
+
+.project-tab-content {
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    padding: var(--spacing-xl);
+    min-height: 500px;
+}
+
+.project-tab-content.active {
+    display: block;
+}
+
+/* Notes Editor */
+.notes-toolbar {
+    display: flex;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+    padding-bottom: var(--spacing-lg);
+    border-bottom: 1px solid var(--border);
+}
+
+#notesEditor {
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    min-height: 500px;
+}
+
+/* Quill Editor Custom Styles */
+.ql-toolbar.ql-snow {
+    background: var(--surface-light);
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.ql-container.ql-snow {
+    background: var(--background);
+    border: 1px solid var(--border) !important;
+    border-top: none !important;
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+    font-size: 1rem;
+    min-height: 400px;
+}
+
+.ql-editor {
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    line-height: 1.8;
+    padding: var(--spacing-lg);
+}
+
+.ql-editor.ql-blank::before {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.ql-snow .ql-stroke {
+    stroke: var(--text-secondary);
+}
+
+.ql-snow .ql-fill {
+    fill: var(--text-secondary);
+}
+
+.ql-snow .ql-picker-label {
+    color: var(--text-secondary);
+}
+
+.ql-toolbar.ql-snow .ql-picker-label:hover,
+.ql-toolbar.ql-snow button:hover {
+    color: var(--primary) !important;
+}
+
+.ql-toolbar.ql-snow .ql-picker-label:hover .ql-stroke,
+.ql-toolbar.ql-snow button:hover .ql-stroke {
+    stroke: var(--primary) !important;
+}
+
+.ql-toolbar.ql-snow .ql-picker-label:hover .ql-fill,
+.ql-toolbar.ql-snow button:hover .ql-fill {
+    fill: var(--primary) !important;
+}
+
+/* Test Card Item with Lock Icon */
+.test-card-item {
+    position: relative;
+}
+
+.test-card-lock {
+    position: absolute;
+    top: var(--spacing-md);
+    right: var(--spacing-md);
+    width: 32px;
+    height: 32px;
+    background: var(--surface-light);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: all var(--transition-fast);
+}
+
+.test-card-lock:hover {
+    color: var(--warning);
+    border-color: var(--warning);
+    background: rgba(255, 173, 102, 0.1);
+}
+
+.test-card-lock.locked {
+    color: var(--warning);
+    border-color: var(--warning);
+    background: rgba(255, 173, 102, 0.15);
+}
+
+.test-card-lock.locked:hover {
+    color: var(--text-secondary);
+    border-color: var(--border);
+    background: var(--surface-light);
 }
 
 /* Small phones (max-width: 480px) */
