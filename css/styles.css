@@ -253,19 +253,29 @@ body {
 .btn-google {
     width: 100%;
     background: white;
-    color: #1f1f1f;
-    font-size: 1rem;
-    padding: 1rem;
+    color: #3c4043;
+    font-size: 0.938rem;
+    font-weight: 500;
+    padding: 0.75rem 1.5rem;
     border: 1px solid #dadce0;
+    box-shadow: 0 1px 2px 0 rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
+    transition: all 0.2s ease;
 }
 
 .btn-google:hover {
     background: #f8f9fa;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    box-shadow: 0 1px 3px 0 rgba(60, 64, 67, 0.3), 0 4px 8px 3px rgba(60, 64, 67, 0.15);
+    border-color: #dadce0;
+    transform: none;
+}
+
+.btn-google:active {
+    background: #f1f3f4;
+    box-shadow: 0 1px 2px 0 rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
 }
 
 .btn-google i {
-    color: #4285f4;
+    font-size: 1.125rem;
 }
 
 .btn-text {

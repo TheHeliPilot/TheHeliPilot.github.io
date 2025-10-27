@@ -56,6 +56,11 @@ function initAuth() {
     const logoutBtn = document.getElementById('logoutBtn');
     const loginBtn = document.getElementById('loginBtn');
 
+    if (!authForm || !toggleRegisterBtn || !googleLoginBtn || !logoutBtn || !loginBtn) {
+        console.error('Auth elements not found');
+        return;
+    }
+
     // Toggle between login and register
     toggleRegisterBtn.addEventListener('click', () => {
         isRegistering = !isRegistering;
