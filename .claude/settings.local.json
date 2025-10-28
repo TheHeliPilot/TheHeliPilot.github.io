@@ -6,7 +6,12 @@
       "Bash(cat:*)",
       "Bash(awk:*)",
       "Bash(git add:*)",
-      "Bash(npm start)"
+      "Bash(npm start)",
+      "Bash(node -e:*)",
+      "Bash(node check-html.js:*)",
+      "Bash(move:*)",
+      "Bash(node check-html.cjs:*)",
+      "Bash(ren check-html.js check-html.cjs)"
     ],
     "deny": [],
     "ask": []

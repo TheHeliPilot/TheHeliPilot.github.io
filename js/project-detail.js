@@ -1,6 +1,10 @@
-// Quill editor instance
-let quillEditor = null;
+// Quill editor instances
+let quillEditor = null;  // Main editor (deprecated, keeping for compatibility)
+let fullscreenQuillEditor = null;  // Fullscreen editor
 let currentProject = null;
+let currentNoteFile = null;  // Currently open note file
+let autoSaveTimeout = null;
+let sidebarCollapsed = false;
 
 // Initialize the project detail page
 export function initProjectDetailPage() {
@@ -22,6 +26,37 @@ export function initProjectDetailPage() {
                         ['link', 'image', 'code-block'],
                         ['clean']
                     ]
+                }
+            });
+        }
+    }
+
+    // Initialize fullscreen Quill editor
+    if (typeof Quill !== 'undefined' && !fullscreenQuillEditor) {
+        const fullscreenEditorElement = document.getElementById('fullscreenNotesEditor');
+        if (fullscreenEditorElement) {
+            fullscreenQuillEditor = new Quill('#fullscreenNotesEditor', {
+                theme: 'snow',
+                placeholder: 'Start writing your notes...',
+                modules: {
+                    toolbar: [
+                        [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+                        ['bold', 'italic', 'underline', 'strike'],
+                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                        [{ 'indent': '-1'}, { 'indent': '+1' }],
+                        [{ 'color': [] }, { 'background': [] }],
+                        [{ 'align': [] }],
+                        ['link', 'image', 'code-block'],
+                        ['clean']
+                    ]
+                }
+            });
+
+            // Auto-save on fullscreen editor change
+            fullscreenQuillEditor.on('text-change', () => {
+                if (currentNoteFile) {
+                    markNoteAsUnsavedFullscreen();
+                    scheduleAutoSave();
                 }
             });
         }
@@ -51,10 +86,22 @@ function setupProjectDetailEventListeners() {
         });
     });
 
-    // Save notes button
-    const saveNotesBtn = document.getElementById('saveNotesBtn');
-    if (saveNotesBtn) {
-        saveNotesBtn.addEventListener('click', saveNotes);
+    // Add note file button
+    const addNoteFileBtn = document.getElementById('addNoteFileBtn');
+    if (addNoteFileBtn) {
+        addNoteFileBtn.addEventListener('click', createNewNoteFile);
+    }
+
+    // Save current note button
+    const saveCurrentNoteBtn = document.getElementById('saveCurrentNoteBtn');
+    if (saveCurrentNoteBtn) {
+        saveCurrentNoteBtn.addEventListener('click', saveCurrentNoteFile);
+    }
+
+    // Select all notes button
+    const selectAllNotesBtn = document.getElementById('selectAllNotesBtn');
+    if (selectAllNotesBtn) {
+        selectAllNotesBtn.addEventListener('click', toggleSelectAllNotes);
     }
 
     // Import notes button
@@ -69,6 +116,27 @@ function setupProjectDetailEventListeners() {
     const cleanNotesBtn = document.getElementById('cleanNotesBtn');
     if (cleanNotesBtn) {
         cleanNotesBtn.addEventListener('click', cleanNotesWithAI);
+    }
+
+    // Auto-save on editor change
+    if (quillEditor) {
+        quillEditor.on('text-change', () => {
+            if (currentNoteFile) {
+                markNoteAsUnsaved();
+                scheduleAutoSave();
+            }
+        });
+    }
+
+    // Title change auto-save
+    const currentNoteTitle = document.getElementById('currentNoteTitle');
+    if (currentNoteTitle) {
+        currentNoteTitle.addEventListener('input', () => {
+            if (currentNoteFile) {
+                markNoteAsUnsaved();
+                scheduleAutoSave();
+            }
+        });
     }
 
 
@@ -119,6 +187,27 @@ function setupProjectDetailEventListeners() {
         startTestBtn.addEventListener('click', startProjectTest);
     }
 
+    // Fullscreen editor controls
+    const closeEditorBtn = document.getElementById('closeEditorBtn');
+    if (closeEditorBtn) {
+        closeEditorBtn.addEventListener('click', closeFullscreenEditor);
+    }
+
+    const toggleSidebarBtn = document.getElementById('toggleSidebarBtn');
+    if (toggleSidebarBtn) {
+        toggleSidebarBtn.addEventListener('click', toggleSidebar);
+    }
+
+    const showSidebarBtn = document.getElementById('showSidebarBtn');
+    if (showSidebarBtn) {
+        showSidebarBtn.addEventListener('click', toggleSidebar);
+    }
+
+    const selectAllNotesSidebarBtn = document.getElementById('selectAllNotesSidebarBtn');
+    if (selectAllNotesSidebarBtn) {
+        selectAllNotesSidebarBtn.addEventListener('click', toggleSelectAllNotes);
+    }
+
     // Initialize study mode
     initStudyMode();
 }
@@ -148,14 +237,40 @@ async function openProject(projectId) {
             titleElement.textContent = currentProject.name;
         }
 
-        // Load notes into editor
-        if (quillEditor) {
-            if (currentProject.notes) {
-                quillEditor.root.innerHTML = currentProject.notes;
-            } else {
-                quillEditor.setText('');
+        // Migrate old notes to noteFiles if needed
+        if (currentProject.notes && (!currentProject.noteFiles || currentProject.noteFiles.length === 0)) {
+            currentProject.noteFiles = [{
+                id: Date.now().toString(),
+                title: 'Main Notes',
+                content: currentProject.notes,
+                selected: true,
+                createdAt: Date.now(),
+                updatedAt: Date.now()
+            }];
+
+            // Save migration
+            try {
+                const { ref, update } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
+                const user = window.auth.currentUser;
+                const projectRef = ref(window.db, `users/${user.uid}/projects/${currentProject.id}`);
+                await update(projectRef, {
+                    noteFiles: currentProject.noteFiles
+                });
+            } catch (error) {
+                console.error('Error migrating notes:', error);
             }
         }
+
+        // Initialize noteFiles if empty
+        if (!currentProject.noteFiles) {
+            currentProject.noteFiles = [];
+        }
+
+        // Render note files list
+        renderNoteFilesList();
+
+        // Reset current note file
+        currentNoteFile = null;
 
         // Load saved language preference
         const languageSelect = document.getElementById('generationLanguage');
@@ -232,7 +347,7 @@ function openAddStudyCardModal() {
 
     // Clear form
     document.getElementById('studyCardTitle').value = '';
-    document.getElementById('studyCardContent').value = '';
+    document.getElementById('newStudyCardContent').value = '';
     document.getElementById('studyCardCategory').value = 'primary';
     document.getElementById('studyCardColor').value = '#667eea';
 
@@ -379,7 +494,7 @@ async function saveTestCardEdit(cardId) {
 async function saveNewStudyCard() {
     try {
         const title = document.getElementById('studyCardTitle').value.trim();
-        const content = document.getElementById('studyCardContent').value.trim();
+        const content = document.getElementById('newStudyCardContent').value.trim();
         const parentValue = document.getElementById('studyCardParent').value;
         const category = document.getElementById('studyCardCategory').value;
         const color = document.getElementById('studyCardColor').value;
@@ -447,7 +562,722 @@ async function saveNewStudyCard() {
     }
 }
 
-// Save notes
+// ============================================
+// NOTE FILES MANAGEMENT
+// ============================================
+
+// Create new note file
+async function createNewNoteFile() {
+    if (!currentProject) {
+        showNotification('No project selected', 'error');
+        return;
+    }
+
+    const title = prompt('Enter note file title:', 'Untitled Note');
+    if (!title) return;
+
+    const noteFile = {
+        id: Date.now().toString(),
+        title: title.trim(),
+        content: '',
+        selected: true,  // Include in generation by default
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+    };
+
+    // Initialize noteFiles array if it doesn't exist
+    if (!currentProject.noteFiles) {
+        currentProject.noteFiles = [];
+    }
+
+    currentProject.noteFiles.push(noteFile);
+
+    // Save to Firebase
+    try {
+        const { ref, update } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
+        const user = window.auth.currentUser;
+        const projectRef = ref(window.db, `users/${user.uid}/projects/${currentProject.id}`);
+        await update(projectRef, {
+            noteFiles: currentProject.noteFiles
+        });
+
+        renderNoteFilesList();
+        openNoteFileFullscreen(noteFile.id);
+        showNotification('Note file created', 'success');
+    } catch (error) {
+        console.error('Error creating note file:', error);
+        showNotification('Failed to create note file', 'error');
+    }
+}
+
+// Render note files list (as file browser cards)
+function renderNoteFilesList() {
+    console.log('renderNoteFilesList called');
+    const container = document.getElementById('noteFilesList');
+    console.log('Container:', container);
+    console.log('Current project:', currentProject);
+    console.log('Note files:', currentProject?.noteFiles);
+
+    if (!currentProject || !currentProject.noteFiles || currentProject.noteFiles.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state" style="grid-column: 1 / -1; padding: 3rem 1rem; text-align: center;">
+                <i class="fas fa-file-alt" style="font-size: 3rem; color: var(--text-muted); margin-bottom: 1rem; opacity: 0.5;"></i>
+                <p style="color: var(--text-muted); font-size: 0.875rem; margin: 0;">No note files yet.<br>Click "New Note File" to create one.</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = currentProject.noteFiles.map(file => {
+        const isActive = currentNoteFile && currentNoteFile.id === file.id;
+        // Get content preview
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = file.content || '';
+        const contentPreview = (tempDiv.textContent || tempDiv.innerText || 'Empty note').substring(0, 120);
+
+        return `
+        <div class="note-file-card" data-file-id="${file.id}"
+             style="background: var(--surface);
+                    border: 2px solid ${isActive ? 'var(--primary)' : 'var(--border)'};
+                    border-radius: var(--radius-lg);
+                    padding: 1.5rem;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    position: relative;
+                    min-height: 200px;
+                    display: flex;
+                    flex-direction: column;">
+            <!-- Checkbox -->
+            <div style="position: absolute; top: 1rem; left: 1rem;">
+                <input type="checkbox" class="note-file-checkbox" ${file.selected ? 'checked' : ''}
+                       style="cursor: pointer; width: 18px; height: 18px; accent-color: var(--primary);"
+                       title="${file.selected ? 'Included in generation' : 'Excluded from generation'}">
+            </div>
+
+            <!-- Delete button -->
+            <button class="note-card-delete-btn"
+                    data-file-title="${escapeHtml(file.title)}"
+                    style="position: absolute; top: 1rem; right: 1rem;
+                           padding: 0.5rem;
+                           background: transparent;
+                           border: none;
+                           color: var(--text-muted);
+                           cursor: pointer;
+                           opacity: 0;
+                           transition: opacity 0.2s;
+                           border-radius: var(--radius-sm);">
+                <i class="fas fa-trash"></i>
+            </button>
+
+            <!-- Content -->
+            <div style="margin-top: 2rem; flex: 1;">
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+                    <i class="fas fa-file-alt" style="color: var(--primary); font-size: 1.25rem;"></i>
+                    <h3 style="margin: 0; font-size: 1.125rem; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        ${escapeHtml(file.title)}
+                    </h3>
+                </div>
+
+                <p style="color: var(--text-muted); font-size: 0.875rem; line-height: 1.5; margin: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;">
+                    ${escapeHtml(contentPreview)}${contentPreview.length >= 120 ? '...' : ''}
+                </p>
+            </div>
+
+            <!-- Footer -->
+            <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; color: var(--text-muted);">
+                    <i class="fas fa-clock"></i>
+                    ${new Date(file.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </div>
+                <div style="font-size: 0.75rem; color: ${file.selected ? 'var(--success)' : 'var(--text-muted)'};">
+                    <i class="fas fa-${file.selected ? 'check-circle' : 'times-circle'}"></i>
+                    ${file.selected ? 'Included' : 'Excluded'}
+                </div>
+            </div>
+        </div>
+    `;
+    }).join('');
+
+    // Add hover effects and click handlers for cards
+    document.querySelectorAll('.note-file-card').forEach(card => {
+        const fileId = card.dataset.fileId;
+
+        // Checkbox handler
+        const checkbox = card.querySelector('.note-file-checkbox');
+        if (checkbox) {
+            checkbox.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await toggleNoteFileSelection(fileId);
+            });
+        }
+
+        // Click handler to open fullscreen editor
+        card.addEventListener('click', (e) => {
+            console.log('Card clicked!', e.target);
+            // Don't open if clicking on checkbox or delete button
+            if (e.target.type === 'checkbox' || e.target.closest('.note-card-delete-btn')) {
+                console.log('Clicked on checkbox or delete button, ignoring');
+                return;
+            }
+            console.log('Opening fullscreen editor for fileId:', fileId);
+            openNoteFileFullscreen(fileId);
+        });
+
+        card.addEventListener('mouseenter', () => {
+            card.style.borderColor = 'var(--primary)';
+            card.style.boxShadow = 'var(--shadow-lg)';
+            const deleteBtn = card.querySelector('.note-card-delete-btn');
+            if (deleteBtn) deleteBtn.style.opacity = '0.6';
+        });
+        card.addEventListener('mouseleave', () => {
+            const fileId = card.dataset.fileId;
+            const isActive = currentNoteFile && currentNoteFile.id === fileId;
+            card.style.borderColor = isActive ? 'var(--primary)' : 'var(--border)';
+            card.style.boxShadow = 'none';
+            const deleteBtn = card.querySelector('.note-card-delete-btn');
+            if (deleteBtn) deleteBtn.style.opacity = '0';
+        });
+
+        const deleteBtn = card.querySelector('.note-card-delete-btn');
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const fileId = card.dataset.fileId;
+                const fileTitle = deleteBtn.dataset.fileTitle;
+                if (confirm(`Delete "${fileTitle}"?`)) {
+                    await deleteNoteFile(fileId);
+                }
+            });
+
+            deleteBtn.addEventListener('mouseenter', () => {
+                deleteBtn.style.opacity = '1';
+                deleteBtn.style.background = 'rgba(239, 68, 68, 0.1)';
+                deleteBtn.style.color = 'var(--danger)';
+            });
+            deleteBtn.addEventListener('mouseleave', () => {
+                deleteBtn.style.opacity = '0.6';
+                deleteBtn.style.background = 'transparent';
+                deleteBtn.style.color = 'var(--text-muted)';
+            });
+        }
+    });
+}
+
+// Open note file in fullscreen editor
+function openNoteFileFullscreen(fileId) {
+    console.log('openNoteFileFullscreen called with fileId:', fileId);
+    console.log('currentProject:', currentProject);
+    console.log('currentProject.noteFiles:', currentProject?.noteFiles);
+
+    if (!currentProject || !currentProject.noteFiles) {
+        console.error('No current project or note files');
+        return;
+    }
+
+    const file = currentProject.noteFiles.find(f => f.id === fileId);
+    console.log('Found file:', file);
+
+    if (!file) {
+        console.error('File not found with id:', fileId);
+        return;
+    }
+
+    currentNoteFile = file;
+
+    // Show fullscreen editor
+    const editorPage = document.getElementById('fullscreenNoteEditor');
+    console.log('Editor page element:', editorPage);
+
+    if (!editorPage) {
+        console.error('fullscreenNoteEditor element not found!');
+        return;
+    }
+
+    editorPage.style.display = 'block';
+    console.log('Editor display set to block');
+
+    // Load title
+    const titleInput = document.getElementById('fullscreenNoteTitle');
+    if (titleInput) {
+        titleInput.value = file.title;
+    }
+
+    // Load content into fullscreen editor
+    console.log('fullscreenQuillEditor:', fullscreenQuillEditor);
+    if (fullscreenQuillEditor) {
+        fullscreenQuillEditor.root.innerHTML = file.content || '';
+        console.log('Content loaded into editor');
+    } else {
+        console.error('fullscreenQuillEditor is not initialized!');
+    }
+
+    // Update sidebar project name
+    const sidebarProjectName = document.getElementById('sidebarProjectName');
+    if (sidebarProjectName && currentProject) {
+        sidebarProjectName.textContent = currentProject.name;
+    }
+
+    // Render sidebar files list
+    renderFullscreenSidebarFilesList();
+
+    // Update include status
+    updateIncludeStatusFullscreen();
+
+    // Mark as saved
+    markNoteAsSavedFullscreen();
+
+    // Set up title auto-save
+    if (titleInput) {
+        titleInput.oninput = () => {
+            if (currentNoteFile) {
+                markNoteAsUnsavedFullscreen();
+                scheduleAutoSave();
+            }
+        };
+    }
+}
+
+// Render sidebar files list in fullscreen editor
+function renderFullscreenSidebarFilesList() {
+    const container = document.getElementById('sidebarNotesList');
+    if (!container || !currentProject || !currentProject.noteFiles) return;
+
+    container.innerHTML = currentProject.noteFiles.map(file => {
+        const isActive = currentNoteFile && currentNoteFile.id === file.id;
+        return `
+        <div class="sidebar-note-item ${isActive ? 'active' : ''}" data-file-id="${file.id}"
+             style="padding: 0.75rem;
+                    background: ${isActive ? 'var(--primary)' : 'transparent'};
+                    border-radius: var(--radius-md);
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    margin-bottom: 0.5rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <input type="checkbox" class="sidebar-file-checkbox" ${file.selected ? 'checked' : ''}
+                       style="cursor: pointer; width: 16px; height: 16px; accent-color: ${isActive ? '#fff' : 'var(--primary)'};">
+                <div style="flex: 1; min-width: 0;">
+                    <div style="font-size: 0.875rem; font-weight: 500;
+                                color: ${isActive ? '#fff' : 'var(--text)'};
+                                white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        <i class="fas fa-file-alt" style="font-size: 0.75rem;"></i> ${escapeHtml(file.title)}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    }).join('');
+
+    // Add event handlers
+    document.querySelectorAll('.sidebar-note-item').forEach(item => {
+        const fileId = item.dataset.fileId;
+        const isActive = item.classList.contains('active');
+
+        // Checkbox handler
+        const checkbox = item.querySelector('.sidebar-file-checkbox');
+        if (checkbox) {
+            checkbox.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await toggleNoteFileSelection(fileId);
+            });
+        }
+
+        // Click handler to switch files
+        item.addEventListener('click', (e) => {
+            if (e.target.type === 'checkbox') return;
+            switchNoteFileInFullscreen(fileId);
+        });
+
+        // Hover effects (only for non-active items)
+        if (!isActive) {
+            item.addEventListener('mouseenter', () => {
+                item.style.background = 'var(--surface-light)';
+            });
+            item.addEventListener('mouseleave', () => {
+                item.style.background = 'transparent';
+            });
+        }
+    });
+}
+
+// Switch note file within fullscreen editor
+async function switchNoteFileInFullscreen(fileId) {
+    if (!currentProject || !currentProject.noteFiles) return;
+
+    // Save current note before switching
+    if (currentNoteFile) {
+        await saveCurrentNoteFileFullscreen();
+    }
+
+    const file = currentProject.noteFiles.find(f => f.id === fileId);
+    if (!file) return;
+
+    currentNoteFile = file;
+
+    // Load new note
+    const titleInput = document.getElementById('fullscreenNoteTitle');
+    if (titleInput) {
+        titleInput.value = file.title;
+    }
+
+    if (fullscreenQuillEditor) {
+        fullscreenQuillEditor.root.innerHTML = file.content || '';
+    }
+
+    // Update UI
+    renderFullscreenSidebarFilesList();
+    updateIncludeStatusFullscreen();
+    markNoteAsSavedFullscreen();
+}
+
+// Close fullscreen editor
+async function closeFullscreenEditor() {
+    // Save before closing
+    if (currentNoteFile) {
+        await saveCurrentNoteFileFullscreen();
+    }
+
+    // Hide fullscreen editor
+    const editorPage = document.getElementById('fullscreenNoteEditor');
+    editorPage.style.display = 'none';
+
+    // Update main file browser
+    renderNoteFilesList();
+}
+
+// Toggle sidebar collapse
+function toggleSidebar() {
+    const sidebar = document.getElementById('editorSidebar');
+    const showSidebarBtn = document.getElementById('showSidebarBtn');
+    const toggleBtn = document.getElementById('toggleSidebarBtn');
+
+    sidebarCollapsed = !sidebarCollapsed;
+
+    if (sidebarCollapsed) {
+        sidebar.style.transform = 'translateX(-100%)';
+        sidebar.style.width = '0';
+        showSidebarBtn.style.display = 'block';
+    } else {
+        sidebar.style.transform = 'translateX(0)';
+        sidebar.style.width = '280px';
+        showSidebarBtn.style.display = 'none';
+    }
+}
+
+// Save current note file from fullscreen editor
+async function saveCurrentNoteFileFullscreen() {
+    if (!currentNoteFile || !currentProject) return;
+
+    try {
+        const titleInput = document.getElementById('fullscreenNoteTitle');
+        const title = titleInput ? titleInput.value.trim() : currentNoteFile.title;
+        const content = fullscreenQuillEditor ? fullscreenQuillEditor.root.innerHTML : '';
+
+        // Update current file
+        const fileIndex = currentProject.noteFiles.findIndex(f => f.id === currentNoteFile.id);
+        if (fileIndex !== -1) {
+            currentProject.noteFiles[fileIndex].title = title || 'Untitled Note';
+            currentProject.noteFiles[fileIndex].content = content;
+            currentProject.noteFiles[fileIndex].updatedAt = Date.now();
+        }
+
+        // Save to Firebase
+        const { ref, update } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
+        const user = window.auth.currentUser;
+        const projectRef = ref(window.db, `users/${user.uid}/projects/${currentProject.id}`);
+        await update(projectRef, {
+            noteFiles: currentProject.noteFiles
+        });
+
+        currentNoteFile.title = title || 'Untitled Note';
+        currentNoteFile.content = content;
+        currentNoteFile.updatedAt = Date.now();
+
+        renderFullscreenSidebarFilesList();
+        markNoteAsSavedFullscreen();
+    } catch (error) {
+        console.error('Error saving note:', error);
+        showNotification('Failed to save note', 'error');
+    }
+}
+
+// Update include status indicator for fullscreen editor
+function updateIncludeStatusFullscreen() {
+    if (!currentNoteFile) return;
+
+    const status = document.getElementById('fullscreenNoteIncludeStatus');
+    if (!status) return;
+
+    if (currentNoteFile.selected) {
+        status.innerHTML = '<i class="fas fa-check-circle" style="color: var(--success);"></i> Included';
+    } else {
+        status.innerHTML = '<i class="fas fa-times-circle" style="color: var(--text-muted);"></i> Excluded';
+    }
+}
+
+// Mark note as unsaved for fullscreen editor
+function markNoteAsUnsavedFullscreen() {
+    const status = document.getElementById('fullscreenNoteSaveStatus');
+    if (status) {
+        status.innerHTML = '<i class="fas fa-circle" style="font-size: 0.5rem; color: var(--warning);"></i> Unsaved';
+    }
+}
+
+// Mark note as saved for fullscreen editor
+function markNoteAsSavedFullscreen() {
+    const status = document.getElementById('fullscreenNoteSaveStatus');
+    if (status) {
+        status.innerHTML = '<i class="fas fa-circle" style="font-size: 0.5rem; color: var(--success);"></i> Saved';
+    }
+}
+
+// Expose fullscreen editor functions to window
+window.openNoteFileFullscreen = openNoteFileFullscreen;
+window.switchNoteFileInFullscreen = switchNoteFileInFullscreen;
+window.closeFullscreenEditor = closeFullscreenEditor;
+window.toggleSidebar = toggleSidebar;
+
+// Open note file
+function openNoteFile(fileId) {
+    if (!currentProject || !currentProject.noteFiles) return;
+
+    const file = currentProject.noteFiles.find(f => f.id === fileId);
+    if (!file) return;
+
+    currentNoteFile = file;
+
+    // Show editor header and hide empty state
+    document.getElementById('editorHeader').style.display = 'block';
+    document.getElementById('editorEmptyState').style.display = 'none';
+    document.getElementById('notesEditor').style.display = 'block';
+
+    // Load title
+    document.getElementById('currentNoteTitle').value = file.title;
+
+    // Load content
+    if (quillEditor) {
+        quillEditor.root.innerHTML = file.content || '';
+    }
+
+    // Update include status
+    updateIncludeStatus();
+
+    // Update file list selection
+    renderNoteFilesList();
+
+    // Mark as saved
+    markNoteAsSaved();
+}
+
+// Save current note file
+async function saveCurrentNoteFile() {
+    if (!currentNoteFile || !currentProject) return;
+
+    try {
+        const title = document.getElementById('currentNoteTitle').value.trim();
+        const content = quillEditor ? quillEditor.root.innerHTML : '';
+
+        // Update current file
+        const fileIndex = currentProject.noteFiles.findIndex(f => f.id === currentNoteFile.id);
+        if (fileIndex !== -1) {
+            currentProject.noteFiles[fileIndex].title = title || 'Untitled Note';
+            currentProject.noteFiles[fileIndex].content = content;
+            currentProject.noteFiles[fileIndex].updatedAt = Date.now();
+        }
+
+        // Save to Firebase
+        const { ref, update } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
+        const user = window.auth.currentUser;
+        const projectRef = ref(window.db, `users/${user.uid}/projects/${currentProject.id}`);
+        await update(projectRef, {
+            noteFiles: currentProject.noteFiles
+        });
+
+        currentNoteFile.title = title || 'Untitled Note';
+        currentNoteFile.content = content;
+        currentNoteFile.updatedAt = Date.now();
+
+        renderNoteFilesList();
+        markNoteAsSaved();
+        showNotification('Note saved', 'success');
+    } catch (error) {
+        console.error('Error saving note:', error);
+        showNotification('Failed to save note', 'error');
+    }
+}
+
+// Toggle note file selection
+async function toggleNoteFileSelection(fileId) {
+    if (!currentProject || !currentProject.noteFiles) return;
+
+    const file = currentProject.noteFiles.find(f => f.id === fileId);
+    if (!file) return;
+
+    file.selected = !file.selected;
+
+    try {
+        const { ref, update } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
+        const user = window.auth.currentUser;
+        const projectRef = ref(window.db, `users/${user.uid}/projects/${currentProject.id}`);
+        await update(projectRef, {
+            noteFiles: currentProject.noteFiles
+        });
+
+        renderNoteFilesList();
+        if (currentNoteFile && currentNoteFile.id === fileId) {
+            // Check if fullscreen editor is open
+            const fullscreenEditor = document.getElementById('fullscreenNoteEditor');
+            if (fullscreenEditor && fullscreenEditor.style.display !== 'none') {
+                updateIncludeStatusFullscreen();
+                renderFullscreenSidebarFilesList();
+            } else {
+                updateIncludeStatus();
+            }
+        }
+    } catch (error) {
+        console.error('Error toggling selection:', error);
+        showNotification('Failed to update selection', 'error');
+    }
+}
+
+// Toggle select all notes
+async function toggleSelectAllNotes() {
+    if (!currentProject || !currentProject.noteFiles || currentProject.noteFiles.length === 0) return;
+
+    const allSelected = currentProject.noteFiles.every(f => f.selected);
+    const newState = !allSelected;
+
+    currentProject.noteFiles.forEach(f => f.selected = newState);
+
+    try {
+        const { ref, update } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
+        const user = window.auth.currentUser;
+        const projectRef = ref(window.db, `users/${user.uid}/projects/${currentProject.id}`);
+        await update(projectRef, {
+            noteFiles: currentProject.noteFiles
+        });
+
+        renderNoteFilesList();
+        if (currentNoteFile) {
+            // Check if fullscreen editor is open
+            const fullscreenEditor = document.getElementById('fullscreenNoteEditor');
+            if (fullscreenEditor && fullscreenEditor.style.display !== 'none') {
+                updateIncludeStatusFullscreen();
+                renderFullscreenSidebarFilesList();
+            } else {
+                updateIncludeStatus();
+            }
+        }
+
+        const btn = document.getElementById('selectAllNotesBtn');
+        if (btn) {
+            btn.textContent = newState ? 'Deselect All' : 'Select All';
+        }
+
+        // Update sidebar button too
+        const sidebarBtn = document.getElementById('selectAllNotesSidebarBtn');
+        if (sidebarBtn) {
+            sidebarBtn.textContent = newState ? 'None' : 'All';
+        }
+    } catch (error) {
+        console.error('Error toggling selection:', error);
+        showNotification('Failed to update selection', 'error');
+    }
+}
+
+// Delete note file
+async function deleteNoteFile(fileId) {
+    if (!currentProject || !currentProject.noteFiles) return;
+
+    const file = currentProject.noteFiles.find(f => f.id === fileId);
+    if (!file) return;
+
+    try {
+        const { ref, update } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
+        currentProject.noteFiles = currentProject.noteFiles.filter(f => f.id !== fileId);
+
+        const user = window.auth.currentUser;
+        const projectRef = ref(window.db, `users/${user.uid}/projects/${currentProject.id}`);
+        await update(projectRef, {
+            noteFiles: currentProject.noteFiles
+        });
+
+        if (currentNoteFile && currentNoteFile.id === fileId) {
+            currentNoteFile = null;
+
+            // Close fullscreen editor if it's open
+            const fullscreenEditor = document.getElementById('fullscreenNoteEditor');
+            if (fullscreenEditor && fullscreenEditor.style.display !== 'none') {
+                fullscreenEditor.style.display = 'none';
+            }
+        }
+
+        renderNoteFilesList();
+        showNotification('Note file deleted', 'success');
+    } catch (error) {
+        console.error('Error deleting note:', error);
+        showNotification('Failed to delete note', 'error');
+    }
+}
+
+// Update include status indicator
+function updateIncludeStatus() {
+    if (!currentNoteFile) return;
+
+    const icon = document.getElementById('noteIncludeIcon');
+    const text = document.getElementById('noteIncludeText');
+
+    if (currentNoteFile.selected) {
+        icon.className = 'fas fa-check-circle';
+        icon.style.color = 'var(--success)';
+        text.textContent = 'Included in generation';
+    } else {
+        icon.className = 'fas fa-times-circle';
+        icon.style.color = 'var(--text-muted)';
+        text.textContent = 'Excluded from generation';
+    }
+}
+
+// Auto-save scheduling
+function scheduleAutoSave() {
+    if (autoSaveTimeout) {
+        clearTimeout(autoSaveTimeout);
+    }
+
+    autoSaveTimeout = setTimeout(async () => {
+        if (currentNoteFile) {
+            // Check if fullscreen editor is open
+            const fullscreenEditor = document.getElementById('fullscreenNoteEditor');
+            if (fullscreenEditor && fullscreenEditor.style.display !== 'none') {
+                await saveCurrentNoteFileFullscreen();
+            } else {
+                await saveCurrentNoteFile();
+            }
+        }
+    }, 2000); // Auto-save after 2 seconds of inactivity
+}
+
+// Mark note as unsaved
+function markNoteAsUnsaved() {
+    const status = document.getElementById('noteSaveStatus');
+    if (status) {
+        status.innerHTML = '<i class="fas fa-circle" style="font-size: 0.5rem; color: var(--warning);"></i> Unsaved';
+    }
+}
+
+// Mark note as saved
+function markNoteAsSaved() {
+    const status = document.getElementById('noteSaveStatus');
+    if (status) {
+        status.innerHTML = '<i class="fas fa-circle" style="font-size: 0.5rem; color: var(--success);"></i> Saved';
+    }
+}
+
+// Expose functions to window
+window.openNoteFileById = openNoteFile;
+window.toggleNoteFileSelection = toggleNoteFileSelection;
+window.deleteNoteFile = deleteNoteFile;
+
+// Save notes (legacy - deprecated, keeping for compatibility)
 async function saveNotes() {
     try {
         if (!window.auth || !window.auth.currentUser || !currentProject) {
@@ -495,20 +1325,56 @@ async function saveNotes() {
     }
 }
 
-// Helper function to retry API calls
-async function retryAPICall(apiCall, maxRetries = 2) {
+// Helper function to retry API calls with better error handling
+async function retryAPICall(apiCall, maxRetries = 2, timeoutMs = 60000) {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        const startTime = Date.now();
         try {
-            const result = await apiCall();
+            if (attempt > 1) {
+                // Show retry notification
+                showNotification(`Retrying API request (attempt ${attempt}/${maxRetries})...`, 'info');
+            }
+
+            // Add timeout wrapper
+            const result = await Promise.race([
+                apiCall(),
+                new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Request timeout - API took too long to respond')), timeoutMs)
+                )
+            ]);
+            const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+            console.log(`✓ API call succeeded in ${duration}s`);
             return result;
         } catch (error) {
-            console.error(`API call attempt ${attempt} failed:`, error);
-            if (attempt === maxRetries) {
-                throw error;
+            const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+            console.error(`✗ API call attempt ${attempt} failed after ${duration}s:`, error);
+
+            // Check for specific error types and provide helpful messages
+            if (error.message.includes('CORS') || error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
+                if (attempt === maxRetries) {
+                    throw new Error('Network error: Unable to connect to API server. This could be due to:\n- Poor internet connection\n- API server maintenance\n- CORS configuration issues\n\nPlease try again in a few minutes.');
+                }
             }
-            // Wait 2 seconds before retrying
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            console.log(`Retrying... (attempt ${attempt + 1}/${maxRetries})`);
+
+            if (error.message.includes('timeout')) {
+                if (attempt === maxRetries) {
+                    throw new Error('API timeout: The server took too long to respond. This could be because:\n- Your input is too large (try reducing content)\n- The API server is overloaded\n- Slow internet connection\n\nPlease try again with smaller content or wait a few minutes.');
+                } else {
+                    showNotification('Request timed out, retrying with longer timeout...', 'warning');
+                }
+            }
+
+            if (attempt === maxRetries) {
+                // Last attempt failed, throw detailed error
+                const errorMsg = error.message || 'Unknown error occurred';
+                throw new Error(`Failed after ${maxRetries} attempts: ${errorMsg}`);
+            }
+
+            // Wait longer before retrying (5 seconds)
+            const waitTime = 5000;
+            console.log(`⏳ Retrying in ${waitTime/1000} seconds... (attempt ${attempt + 1}/${maxRetries})`);
+            console.log(`   Reason: ${error.message}`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
         }
     }
 }
@@ -521,20 +1387,35 @@ async function regenerateProject() {
             return;
         }
 
-        if (!quillEditor) {
-            showNotification('Editor not initialized', 'error');
+        // Get selected note files
+        const selectedNotes = currentProject.noteFiles?.filter(f => f.selected) || [];
+
+        if (selectedNotes.length === 0) {
+            showNotification('Please select at least one note file to include in generation', 'error');
+            return;
+        }
+
+        // Combine all selected note files
+        const notesText = selectedNotes.map(note => {
+            // Convert HTML to plain text
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = note.content || '';
+            const plainText = tempDiv.textContent || tempDiv.innerText || '';
+            return `# ${note.title}\n\n${plainText}`;
+        }).join('\n\n---\n\n');
+
+        if (!notesText || notesText.trim().length < 50) {
+            showNotification('Please add more content to your selected notes (at least 50 characters)', 'error');
             return;
         }
 
         // Confirm action
-        if (!confirm('This will regenerate all test cards and study cards from your notes. Continue?')) {
-            return;
-        }
+        const selectedCount = selectedNotes.length;
+        const message = selectedCount === 1
+            ? `This will regenerate cards from "${selectedNotes[0].title}". Continue?`
+            : `This will regenerate cards from ${selectedCount} selected note files. Continue?`;
 
-        const notesText = quillEditor.getText().trim();
-
-        if (!notesText || notesText.length < 50) {
-            showNotification('Please add more content to your notes (at least 50 characters)', 'error');
+        if (!confirm(message)) {
             return;
         }
 
@@ -597,29 +1478,56 @@ async function regenerateProject() {
         console.log('Sending study cards request:', studyCardsPayload);
 
         const generatedData = await retryAPICall(async () => {
-            const response = await fetch('https://quizapp2-eight.vercel.app/api/generate-study-cards', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(studyCardsPayload)
-            });
+            // Create abort controller for fetch timeout
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout for fetch itself (AI generation takes time)
 
-            if (!response.ok) {
-                let errorMessage = 'Failed to generate cards';
-                try {
-                    const error = await response.json();
-                    console.error('Generation API error:', error);
-                    errorMessage = error.error || error.message || `Server error (${response.status})`;
-                } catch (e) {
-                    console.error('Could not parse error response:', e);
-                    errorMessage = `Server error (${response.status})`;
+            try {
+                const response = await fetch('https://quizapp2-eight.vercel.app/api/generate-study-cards', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(studyCardsPayload),
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    let errorMessage = 'Failed to generate cards';
+                    try {
+                        const error = await response.json();
+                        console.error('Generation API error:', error);
+                        errorMessage = error.error || error.message || `Server error (${response.status})`;
+                    } catch (e) {
+                        console.error('Could not parse error response:', e);
+                        errorMessage = `Server error (${response.status})`;
+                    }
+                    throw new Error(errorMessage);
                 }
-                throw new Error(errorMessage);
-            }
 
-            const data = await response.json();
-            console.log('Cards generated:', data);
-            return data;
-        });
+                const data = await response.json();
+                console.log('Cards generated:', data);
+                return data;
+            } catch (error) {
+                clearTimeout(timeoutId);
+                console.error('Fetch error details:', {
+                    name: error.name,
+                    message: error.message,
+                    stack: error.stack
+                });
+
+                if (error.name === 'AbortError') {
+                    throw new Error('Request timeout - API took too long to respond (60s exceeded)');
+                }
+
+                // For other errors, preserve the original error message
+                if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                    throw new Error(`Network error: Cannot reach API server. Check if:\n- You have internet connection\n- The API server is running\n- CORS is configured correctly\n\nOriginal error: ${error.message}`);
+                }
+
+                throw error;
+            }
+        }, 2, 90000); // 2 retries, 90 second overall timeout
 
         // Step 2: Delete old cards before saving new ones
         regenerateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting old cards...';
@@ -2158,13 +3066,38 @@ async function handleFileImport(event) {
             throw new Error('No text extracted from file');
         }
 
-        // Insert raw text into editor
-        if (quillEditor) {
-            quillEditor.setText(parseData.text);
+        // Create new note file with imported content
+        const fileName = file.name.replace(/\.[^/.]+$/, ''); // Remove extension
+        const noteFile = {
+            id: Date.now().toString(),
+            title: fileName,
+            content: `<p>${parseData.text.replace(/\n/g, '</p><p>')}</p>`, // Convert to HTML
+            selected: true,
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+        };
 
-            const wordCount = parseData.text.split(/\s+/).length;
-            showNotification(`File imported! ${wordCount} words extracted. Use "AI Clean" to format.`, 'success');
+        if (!currentProject.noteFiles) {
+            currentProject.noteFiles = [];
         }
+
+        currentProject.noteFiles.push(noteFile);
+
+        // Save to Firebase
+        const { ref, update } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
+        const user = window.auth.currentUser;
+        const projectRef = ref(window.db, `users/${user.uid}/projects/${currentProject.id}`);
+        await update(projectRef, {
+            noteFiles: currentProject.noteFiles
+        });
+
+        const wordCount = parseData.text.split(/\s+/).length;
+        showNotification(`File imported! Created "${fileName}" with ${wordCount} words.`, 'success');
+
+        // Render and open the new file
+        renderNoteFilesList();
+        openNoteFile(noteFile.id);
+
     } catch (error) {
         console.error('Import error:', error);
         showNotification('Failed to import file: ' + error.message, 'error');

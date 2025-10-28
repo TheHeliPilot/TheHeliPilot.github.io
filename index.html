@@ -272,6 +272,10 @@
                 <div id="notesTab" class="project-tab-content active">
                     <div class="notes-toolbar">
                         <div style="display: flex; gap: var(--spacing-md); align-items: center;">
+                            <button id="addNoteFileBtn" class="btn btn-primary">
+                                <i class="fas fa-file-plus"></i>
+                                New Note File
+                            </button>
                             <select id="generationLanguage" class="select-input" style="width: 150px;">
                                 <option value="en">English</option>
                                 <option value="sk">Slovak</option>
@@ -294,9 +298,9 @@
                                 <i class="fas fa-wand-magic-sparkles"></i>
                                 AI Clean
                             </button>
-                            <button id="saveNotesBtn" class="btn btn-secondary">
+                            <button id="saveCurrentNoteBtn" class="btn btn-secondary">
                                 <i class="fas fa-save"></i>
-                                Save Notes
+                                Save Current Note
                             </button>
                             <button id="regenerateProjectBtn" class="btn btn-primary">
                                 <i class="fas fa-sync-alt"></i>
@@ -304,7 +308,13 @@
                             </button>
                         </div>
                     </div>
-                    <div id="notesEditor"></div>
+
+                    <!-- Notes Layout: File Browser -->
+                    <div id="notesBrowser" style="padding: 1rem;">
+                        <div id="noteFilesList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;">
+                            <!-- Note files will be rendered here as cards -->
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Test Cards Tab -->
@@ -599,7 +609,7 @@
                         <button id="studyMindMapViewBtn" class="btn btn-secondary">
                             <i class="fas fa-project-diagram"></i> Mind Map
                         </button>
-                        <button id="startStudyModeBtn" class="btn btn-primary">
+                        <button id="startStudyModeFromViewerBtn" class="btn btn-primary">
                             <i class="fas fa-graduation-cap"></i> Start Studying
                         </button>
                         <button id="closeStudyMaterialsBtn" class="btn btn-secondary">
@@ -610,7 +620,7 @@
 
                 <!-- List View -->
                 <div id="studyListView" class="active">
-                    <div id="studyCardsList" style="display: flex; flex-direction: column; gap: 1rem;">
+                    <div id="studyCardsListViewer" style="display: flex; flex-direction: column; gap: 1rem;">
                         <!-- Study cards will be rendered here -->
                     </div>
                 </div>
@@ -641,12 +651,76 @@
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                                     <div style="width: 20px; height: 20px; border-radius: 50%; background: var(--surface); border: 3px solid #ef4444;"></div>
-                                    <span style="color: var(--text);">Weak</span>
+                                    <span style="color: var(--text);">Needs Review</span>
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                                     <div style="width: 20px; height: 20px; border-radius: 50%; background: var(--surface); border: 2px solid #6b7280;"></div>
                                     <span style="color: var(--text-muted);">Not Studied</span>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fullscreen Note Editor -->
+            <div id="fullscreenNoteEditor" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100vh; background: var(--background); z-index: 1000;">
+                <div style="display: flex; height: 100vh;">
+                    <!-- Collapsible Sidebar -->
+                    <div id="editorSidebar" style="width: 280px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; transition: transform 0.3s ease;">
+                        <!-- Sidebar Header -->
+                        <div style="padding: 1.5rem; border-bottom: 1px solid var(--border);">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+                                <h3 style="margin: 0; font-size: 0.875rem; color: var(--text); font-weight: 600;">
+                                    <i class="fas fa-file-alt"></i> <span id="sidebarProjectName">Notes</span>
+                                </h3>
+                                <button id="toggleSidebarBtn" class="btn btn-sm" style="padding: 0.375rem; background: transparent; border: none; color: var(--text-muted);" title="Toggle sidebar">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                            </div>
+                            <button id="closeEditorBtn" class="btn btn-secondary" style="width: 100%; justify-content: center;">
+                                <i class="fas fa-arrow-left"></i> Back to Project
+                            </button>
+                        </div>
+
+                        <!-- Files List -->
+                        <div style="padding: 1rem; border-bottom: 1px solid var(--border);">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">Files</span>
+                                <button id="selectAllNotesSidebarBtn" class="btn btn-sm" style="padding: 0.25rem 0.5rem; font-size: 0.7rem;">All</button>
+                            </div>
+                        </div>
+                        <div id="sidebarNotesList" style="flex: 1; overflow-y: auto; padding: 0.5rem;">
+                            <!-- Note files will be rendered here -->
+                        </div>
+                    </div>
+
+                    <!-- Main Editor Area -->
+                    <div style="flex: 1; display: flex; flex-direction: column; position: relative; overflow: hidden;">
+                        <!-- Top Bar -->
+                        <div style="padding: 1rem 2rem; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; justify-content: space-between;">
+                            <button id="showSidebarBtn" class="btn btn-secondary" style="display: none; padding: 0.5rem;">
+                                <i class="fas fa-bars"></i>
+                            </button>
+                            <div style="flex: 1; max-width: 800px; margin: 0 auto;">
+                                <input type="text" id="fullscreenNoteTitle" placeholder="Untitled Note"
+                                       style="width: 100%; background: transparent; border: none; padding: 0.5rem 0;
+                                              color: var(--text); font-size: 1.5rem; font-weight: 700; outline: none;">
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 1rem;">
+                                <span id="fullscreenNoteSaveStatus" style="font-size: 0.875rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.5rem;">
+                                    <i class="fas fa-circle" style="font-size: 0.5rem; color: var(--success);"></i> Saved
+                                </span>
+                                <span id="fullscreenNoteIncludeStatus" style="font-size: 0.875rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.5rem;">
+                                    <i class="fas fa-check-circle" style="color: var(--success);"></i> Included
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Editor Container -->
+                        <div style="flex: 1; overflow-y: auto; background: var(--background);">
+                            <div style="max-width: 900px; margin: 0 auto; padding: 3rem 2rem;">
+                                <div id="fullscreenNotesEditor" style="min-height: 500px; background: var(--surface); border-radius: var(--radius-lg); padding: 2rem; box-shadow: var(--shadow-md);"></div>
                             </div>
                         </div>
                     </div>
@@ -1531,7 +1605,7 @@
 
                 <div class="form-group">
                     <label>Content / Description</label>
-                    <textarea id="studyCardContent" class="text-input" rows="4" placeholder="Card content..." required></textarea>
+                    <textarea id="newStudyCardContent" class="text-input" rows="4" placeholder="Card content..." required></textarea>
                 </div>
 
                 <div class="form-group">

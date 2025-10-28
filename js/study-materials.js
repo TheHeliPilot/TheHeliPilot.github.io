@@ -134,9 +134,9 @@ function initStudyMaterials() {
     }
 
     // Start study mode button
-    const startStudyModeBtn = document.getElementById('startStudyModeBtn');
-    if (startStudyModeBtn) {
-        startStudyModeBtn.addEventListener('click', () => {
+    const startStudyModeFromViewerBtn = document.getElementById('startStudyModeFromViewerBtn');
+    if (startStudyModeFromViewerBtn) {
+        startStudyModeFromViewerBtn.addEventListener('click', () => {
             if (!currentViewingProject) {
                 showNotification('No project selected', 'error');
                 return;
@@ -297,7 +297,7 @@ function initStudyMaterials() {
 function renderStudyCardsList() {
     if (!currentViewingProject || !currentViewingProject.studyCards) return;
 
-    const container = document.getElementById('studyCardsList');
+    const container = document.getElementById('studyCardsListViewer');
     const cards = currentViewingProject.studyCards;
 
     // Group by level for better organization
@@ -416,14 +416,14 @@ function renderMindMap() {
     d3.select('#mindMapSvg').selectAll('*').remove();
     if (mindMapSimulation) mindMapSimulation.stop();
 
-    // Build nodes and links (include mastery data)
+    // Build nodes and links (include mastery data, default to weak)
     const nodes = cards.map((card, i) => ({
         id: i,
         topic: card.topic,
         content: card.content,
         level: card.level,
         category: card.category,
-        mastery: card.mastery || 'none'
+        mastery: card.mastery || 'weak'  // Default to weak (needs review)
     }));
 
     const links = [];
@@ -504,31 +504,44 @@ function renderMindMap() {
         'none': '#6b7280'       // Gray
     };
 
-    // Node circles
-    node.append('circle')
+    // Node circles - fixed hover issue
+    const circles = node.append('circle')
         .attr('r', d => radiusScale(d.level))
         .attr('fill', d => colorScale(d.level))
         .attr('stroke', d => masteryColors[d.mastery])
-        .attr('stroke-width', d => d.mastery !== 'none' ? 4 : 2)  // Thicker border for mastered cards
+        .attr('stroke-width', d => ['mastered', 'good', 'learning', 'weak'].includes(d.mastery) ? 4 : 2)
+        .style('cursor', 'pointer');
+
+    // Add hover area (invisible larger circle) to prevent hover loss
+    node.append('circle')
+        .attr('r', d => radiusScale(d.level) + 15)
+        .attr('fill', 'transparent')
         .style('cursor', 'pointer')
-        .style('transition', 'all 0.3s ease')
-        .on('mouseover', function(event, d) {
-            // Scale up on hover
-            d3.select(this)
-                .attr('stroke-width', d.mastery !== 'none' ? 6 : 4)
-                .style('filter', 'brightness(1.2)');
+        .on('mouseenter', function(event, d) {
+            const parentNode = d3.select(this.parentNode);
+            // Highlight the visible circle
+            parentNode.select('circle:first-child')
+                .transition()
+                .duration(200)
+                .attr('stroke-width', ['mastered', 'good', 'learning', 'weak'].includes(d.mastery) ? 6 : 4)
+                .attr('r', radiusScale(d.level) + 3);
+
             showTooltip(event, d);
         })
-        .on('mouseout', function(event, d) {
-            // Scale back on hover out
-            d3.select(this)
-                .attr('stroke-width', d.mastery !== 'none' ? 4 : 2)
-                .style('filter', 'brightness(1)');
+        .on('mouseleave', function(event, d) {
+            const parentNode = d3.select(this.parentNode);
+            // Reset the visible circle
+            parentNode.select('circle:first-child')
+                .transition()
+                .duration(200)
+                .attr('stroke-width', ['mastered', 'good', 'learning', 'weak'].includes(d.mastery) ? 4 : 2)
+                .attr('r', radiusScale(d.level));
+
             hideTooltip();
         })
         .on('click', (event, d) => {
             // Pulse animation on click
-            d3.select(event.target)
+            d3.select(event.target.parentNode).select('circle:first-child')
                 .transition()
                 .duration(300)
                 .attr('r', radiusScale(d.level) + 10)
@@ -537,18 +550,42 @@ function renderMindMap() {
                 .attr('r', radiusScale(d.level));
         });
 
-    // Node labels (abbreviated)
-    node.append('text')
-        .text(d => {
-            const words = d.topic.split(' ');
-            return words.length > 3 ? words.slice(0, 3).join(' ') + '...' : d.topic;
-        })
-        .attr('text-anchor', 'middle')
-        .attr('dy', d => radiusScale(d.level) + 20)
-        .attr('font-size', '11px')
-        .attr('fill', '#e8eaed')
-        .style('pointer-events', 'none')
-        .style('user-select', 'none');
+    // Node labels (abbreviated and wrapped)
+    node.each(function(d) {
+        const textGroup = d3.select(this);
+        let topic = d.topic;
+
+        // Truncate long text intelligently
+        if (topic.length > 30) {
+            topic = topic.substring(0, 27) + '...';
+        }
+
+        // Split into words for wrapping
+        const words = topic.split(' ');
+        const maxWordsPerLine = 3;
+        const lines = [];
+
+        for (let i = 0; i < words.length; i += maxWordsPerLine) {
+            lines.push(words.slice(i, i + maxWordsPerLine).join(' '));
+        }
+
+        // Add text lines
+        const radius = radiusScale(d.level);
+        const startY = radius + 15;
+        const lineHeight = 12;
+
+        lines.forEach((line, i) => {
+            textGroup.append('text')
+                .text(line)
+                .attr('text-anchor', 'middle')
+                .attr('dy', startY + (i * lineHeight))
+                .attr('font-size', '10px')
+                .attr('fill', '#e8eaed')
+                .attr('font-weight', '500')
+                .style('pointer-events', 'none')
+                .style('user-select', 'none');
+        });
+    });
 
     // Update positions on tick with curved links
     mindMapSimulation.on('tick', () => {
@@ -578,11 +615,13 @@ function renderMindMap() {
     // Tooltip functions
     function showTooltip(event, d) {
         const tooltip = document.getElementById('mindMapTooltip');
+        if (!tooltip) return;
+
         const masteryLabels = {
             'mastered': '✓ Mastered',
             'good': '👍 Good',
             'learning': '📚 Learning',
-            'weak': '⚠️ Weak',
+            'weak': '⚠️ Needs Review',
             'none': '○ Not studied'
         };
         const masteryColors = {
@@ -593,21 +632,33 @@ function renderMindMap() {
             'none': '#6b7280'
         };
 
-        tooltip.querySelector('h4').textContent = d.topic;
-        tooltip.querySelector('p').innerHTML = d.content +
-            `<br><br><span style="color: ${masteryColors[d.mastery]}; font-weight: 600; font-size: 0.9em;">${masteryLabels[d.mastery]}</span>`;
-        tooltip.style.left = (event.pageX + 15) + 'px';
-        tooltip.style.top = (event.pageY + 15) + 'px';
+        const h4 = tooltip.querySelector('h4');
+        const p = tooltip.querySelector('p');
+
+        if (h4) h4.textContent = d.topic;
+        if (p) {
+            p.innerHTML = d.content +
+                `<br><br><span style="color: ${masteryColors[d.mastery]}; font-weight: 600; font-size: 0.9em;">${masteryLabels[d.mastery]}</span>`;
+        }
+
+        // Position tooltip carefully to avoid covering nodes
+        const xOffset = event.pageX + 20;
+        const yOffset = event.pageY - 30;
+
+        tooltip.style.left = xOffset + 'px';
+        tooltip.style.top = yOffset + 'px';
         tooltip.style.opacity = '1';
-        tooltip.style.zIndex = '10000';
+        tooltip.style.visibility = 'visible';
+        tooltip.style.zIndex = '9999';
+        tooltip.style.pointerEvents = 'none';  // Critical: tooltip shouldn't capture mouse events
     }
 
     function hideTooltip() {
         const tooltip = document.getElementById('mindMapTooltip');
+        if (!tooltip) return;
+
         tooltip.style.opacity = '0';
-        setTimeout(() => {
-            tooltip.style.zIndex = '-1';
-        }, 200);
+        tooltip.style.visibility = 'hidden';
     }
 
     // Drag behavior
