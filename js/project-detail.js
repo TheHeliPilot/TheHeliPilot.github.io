@@ -57,6 +57,20 @@ function setupProjectDetailEventListeners() {
         saveNotesBtn.addEventListener('click', saveNotes);
     }
 
+    // Import notes button
+    const importNotesBtn = document.getElementById('importNotesBtn');
+    const importNotesFile = document.getElementById('importNotesFile');
+    if (importNotesBtn && importNotesFile) {
+        importNotesBtn.addEventListener('click', () => importNotesFile.click());
+        importNotesFile.addEventListener('change', handleFileImport);
+    }
+
+    // Clean notes button
+    const cleanNotesBtn = document.getElementById('cleanNotesBtn');
+    if (cleanNotesBtn) {
+        cleanNotesBtn.addEventListener('click', cleanNotesWithAI);
+    }
+
     // Regenerate project button
     const regenerateBtn = document.getElementById('regenerateProjectBtn');
     if (regenerateBtn) {
@@ -103,6 +117,9 @@ function setupProjectDetailEventListeners() {
     if (startTestBtn) {
         startTestBtn.addEventListener('click', startProjectTest);
     }
+
+    // Initialize study mode
+    initStudyMode();
 }
 
 // Open a project in detail view
@@ -1414,6 +1431,53 @@ function renderMindMap() {
             .attr('transform', d => `translate(${d.x},${d.y})`);
     });
 
+    // Auto-fit view after simulation settles
+    simulation.on('end', () => {
+        autoFitView();
+    });
+
+    // Auto-fit function
+    function autoFitView() {
+        if (nodes.length === 0) return;
+
+        // Calculate bounding box of all nodes
+        let minX = Infinity, maxX = -Infinity;
+        let minY = Infinity, maxY = -Infinity;
+
+        nodes.forEach(node => {
+            const nodeWidth = node.width || 140;
+            minX = Math.min(minX, node.x - nodeWidth / 2);
+            maxX = Math.max(maxX, node.x + nodeWidth / 2);
+            minY = Math.min(minY, node.y - rectHeight / 2);
+            maxY = Math.max(maxY, node.y + rectHeight / 2);
+        });
+
+        // Add padding
+        const padding = 100;
+        minX -= padding;
+        maxX += padding;
+        minY -= padding;
+        maxY += padding;
+
+        // Calculate scale and translate
+        const boundingWidth = maxX - minX;
+        const boundingHeight = maxY - minY;
+        const scale = Math.min(width / boundingWidth, height / boundingHeight, 1);
+        const translateX = (width - boundingWidth * scale) / 2 - minX * scale;
+        const translateY = (height - boundingHeight * scale) / 2 - minY * scale;
+
+        // Smoothly transition to fit view
+        svg.transition()
+            .duration(1000)
+            .call(
+                zoom.transform,
+                d3.zoomIdentity.translate(translateX, translateY).scale(scale)
+            );
+    }
+
+    // Trigger auto-fit after 3 seconds (when simulation settles)
+    setTimeout(autoFitView, 3000);
+
     // Drag functions
     function dragStarted(event, d) {
         if (!event.active) simulation.alphaTarget(0.3).restart();
@@ -1432,6 +1496,210 @@ function renderMindMap() {
         d.fx = null;
         d.fy = null;
         d3.select(this).style('cursor', 'grab');
+    }
+}
+
+// Study Mode State
+let studyModeState = {
+    cards: [],
+    currentIndex: 0
+};
+
+// Initialize Study Mode
+function initStudyMode() {
+    const startBtn = document.getElementById('startStudyModeBtn');
+    const prevBtn = document.getElementById('studyModePrev');
+    const nextBtn = document.getElementById('studyModeNext');
+    const restartBtn = document.getElementById('restartStudyModeBtn');
+
+    startBtn?.addEventListener('click', startStudyMode);
+    prevBtn?.addEventListener('click', () => navigateStudyMode(-1));
+    nextBtn?.addEventListener('click', () => navigateStudyMode(1));
+    restartBtn?.addEventListener('click', startStudyMode);
+
+    // Keyboard navigation
+    document.addEventListener('keydown', (e) => {
+        const studyModeActive = document.getElementById('studyModeCard')?.classList.contains('hidden') === false;
+        if (!studyModeActive) return;
+
+        if (e.key === 'ArrowLeft') navigateStudyMode(-1);
+        else if (e.key === 'ArrowRight') navigateStudyMode(1);
+    });
+}
+
+// Start Study Mode
+function startStudyMode() {
+    if (!currentProject || !currentProject.studyCards || currentProject.studyCards.length === 0) {
+        showNotification('No study cards available', 'error');
+        return;
+    }
+
+    // Sort cards in hierarchical order (breadth-first traversal)
+    studyModeState.cards = sortCardsHierarchically(currentProject.studyCards);
+    studyModeState.currentIndex = 0;
+
+    // Show study mode UI
+    document.getElementById('startStudyModeBtn').style.display = 'none';
+    document.getElementById('studyModeCard').classList.remove('hidden');
+    document.getElementById('studyModeComplete').classList.add('hidden');
+
+    // Display first card
+    displayStudyCard();
+}
+
+// Sort cards in hierarchical order (breadth-first)
+function sortCardsHierarchically(cards) {
+    const sorted = [];
+    const levels = {};
+
+    // Group by level
+    cards.forEach((card, index) => {
+        const level = card.level || 0;
+        if (!levels[level]) levels[level] = [];
+        levels[level].push({ ...card, originalIndex: index });
+    });
+
+    // Add cards level by level
+    Object.keys(levels).sort((a, b) => a - b).forEach(level => {
+        sorted.push(...levels[level]);
+    });
+
+    return sorted;
+}
+
+// Display current study card
+function displayStudyCard() {
+    if (studyModeState.currentIndex >= studyModeState.cards.length) {
+        showStudyComplete();
+        return;
+    }
+
+    const card = studyModeState.cards[studyModeState.currentIndex];
+    const totalCards = studyModeState.cards.length;
+    const currentNum = studyModeState.currentIndex + 1;
+
+    // Update progress
+    document.getElementById('studyModeProgress').textContent = `${currentNum} / ${totalCards}`;
+    document.getElementById('studyModeProgressBar').style.width = `${(currentNum / totalCards) * 100}%`;
+
+    // Update card content
+    const levelLabels = {
+        0: 'Overview',
+        1: 'Main Topic',
+        2: 'Subtopic',
+        3: 'Detailed Concept',
+        4: 'Specific Detail'
+    };
+    document.getElementById('studyCardLevel').textContent = levelLabels[card.level] || `Level ${card.level}`;
+    document.getElementById('studyCardLevel').style.background = card.color || '#667eea';
+    document.getElementById('studyCardTopic').textContent = card.topic || card.term || 'Untitled';
+    document.getElementById('studyCardContent').textContent = card.content || card.definition || '';
+
+    // Update navigation buttons
+    document.getElementById('studyModePrev').disabled = studyModeState.currentIndex === 0;
+    document.getElementById('studyModeNext').disabled = studyModeState.currentIndex === totalCards - 1;
+}
+
+// Navigate study mode
+function navigateStudyMode(direction) {
+    const newIndex = studyModeState.currentIndex + direction;
+    if (newIndex < 0 || newIndex >= studyModeState.cards.length) return;
+
+    studyModeState.currentIndex = newIndex;
+    displayStudyCard();
+}
+
+// Show study complete
+function showStudyComplete() {
+    document.getElementById('studyModeCard').classList.add('hidden');
+    document.getElementById('studyModeComplete').classList.remove('hidden');
+}
+
+// Handle file import
+async function handleFileImport(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Check file type
+    const validTypes = ['.pdf', '.docx', '.txt', '.md'];
+    const fileExt = '.' + file.name.split('.').pop().toLowerCase();
+    if (!validTypes.includes(fileExt)) {
+        showNotification('Invalid file type. Please upload PDF, DOCX, TXT, or MD files.', 'error');
+        return;
+    }
+
+    try {
+        showNotification('Importing file...', 'info');
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch('https://quizapp2-eight.vercel.app/api/parse-file', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to parse file');
+        }
+
+        const data = await response.json();
+
+        // Insert extracted text into editor
+        if (quillEditor && data.text) {
+            quillEditor.setText(data.text);
+            showNotification('File imported successfully!', 'success');
+        }
+    } catch (error) {
+        console.error('Import error:', error);
+        showNotification('Failed to import file: ' + error.message, 'error');
+    }
+
+    // Reset file input
+    event.target.value = '';
+}
+
+// Clean notes with AI
+async function cleanNotesWithAI() {
+    if (!quillEditor) {
+        showNotification('Editor not available', 'error');
+        return;
+    }
+
+    const rawText = quillEditor.getText();
+    if (!rawText || rawText.trim().length === 0) {
+        showNotification('No notes to clean', 'error');
+        return;
+    }
+
+    try {
+        showNotification('Cleaning notes with AI...', 'info');
+
+        const response = await fetch('https://quizapp2-eight.vercel.app/api/clean-notes', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                text: rawText,
+                userId: auth.currentUser?.uid
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to clean notes');
+        }
+
+        const data = await response.json();
+
+        if (data.cleanedText) {
+            // Replace editor content with cleaned text
+            quillEditor.setText(data.cleanedText);
+            showNotification('Notes cleaned successfully!', 'success');
+        }
+    } catch (error) {
+        console.error('Clean notes error:', error);
+        showNotification('Failed to clean notes: ' + error.message, 'error');
     }
 }
 

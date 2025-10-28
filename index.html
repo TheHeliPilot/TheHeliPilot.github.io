@@ -274,6 +274,10 @@
                         <i class="fas fa-project-diagram"></i>
                         Mind Map
                     </button>
+                    <button class="project-tab" data-tab="studyMode">
+                        <i class="fas fa-graduation-cap"></i>
+                        Study Mode
+                    </button>
                 </div>
 
                 <!-- Notes Tab -->
@@ -296,6 +300,15 @@
                             </select>
                         </div>
                         <div style="display: flex; gap: var(--spacing-md); margin-left: auto;">
+                            <input type="file" id="importNotesFile" accept=".pdf,.docx,.txt,.md" style="display: none;">
+                            <button id="importNotesBtn" class="btn btn-secondary">
+                                <i class="fas fa-file-import"></i>
+                                Import File
+                            </button>
+                            <button id="cleanNotesBtn" class="btn btn-secondary">
+                                <i class="fas fa-wand-magic-sparkles"></i>
+                                AI Clean Notes
+                            </button>
                             <button id="saveNotesBtn" class="btn btn-secondary">
                                 <i class="fas fa-save"></i>
                                 Save Notes
@@ -354,6 +367,75 @@
                         <div id="projectMindMapTooltip" style="position: absolute; padding: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-xl); pointer-events: none; opacity: 0; transition: opacity 0.2s; max-width: 400px; z-index: 1000;">
                             <h4 style="margin: 0 0 0.5rem 0; color: var(--primary);"></h4>
                             <p style="margin: 0; color: var(--text-secondary);"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Study Mode Tab -->
+                <div id="studyModeTab" class="project-tab-content">
+                    <div id="studyModeContainer" style="max-width: 800px; margin: 0 auto; padding: var(--spacing-xl);">
+                        <!-- Study Mode Controls -->
+                        <div style="text-align: center; margin-bottom: var(--spacing-xl);">
+                            <button id="startStudyModeBtn" class="btn btn-primary" style="font-size: 1.125rem; padding: 1rem 2rem;">
+                                <i class="fas fa-play-circle"></i>
+                                Start Study Session
+                            </button>
+                        </div>
+
+                        <!-- Study Card Display -->
+                        <div id="studyModeCard" class="hidden" style="position: relative;">
+                            <!-- Progress Bar -->
+                            <div style="margin-bottom: var(--spacing-lg);">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: var(--spacing-sm); color: var(--text-secondary); font-size: 0.875rem;">
+                                    <span>Progress</span>
+                                    <span id="studyModeProgress">0 / 0</span>
+                                </div>
+                                <div style="height: 8px; background: var(--surface-light); border-radius: 4px; overflow: hidden;">
+                                    <div id="studyModeProgressBar" style="height: 100%; background: linear-gradient(90deg, var(--primary), var(--secondary)); width: 0%; transition: width 0.3s ease;"></div>
+                                </div>
+                            </div>
+
+                            <!-- Card (No Flipping - All Visible) -->
+                            <div id="studyCardContainer" style="margin-bottom: var(--spacing-xl);">
+                                <div style="background: var(--surface); border: 2px solid var(--border); border-radius: var(--radius-xl); padding: 3rem; box-shadow: var(--shadow-xl);">
+                                    <!-- Level Badge -->
+                                    <div style="text-align: center; margin-bottom: var(--spacing-lg);">
+                                        <div id="studyCardLevel" style="display: inline-block; padding: 0.5rem 1rem; background: var(--primary); color: white; border-radius: var(--radius-md); font-size: 0.875rem;"></div>
+                                    </div>
+
+                                    <!-- Topic -->
+                                    <h2 id="studyCardTopic" style="color: var(--primary); margin-bottom: var(--spacing-lg); font-size: 2rem; text-align: center;"></h2>
+
+                                    <!-- Divider -->
+                                    <div style="height: 2px; background: linear-gradient(90deg, transparent, var(--border), transparent); margin: var(--spacing-lg) 0;"></div>
+
+                                    <!-- Content -->
+                                    <div id="studyCardContent" style="color: var(--text); font-size: 1.125rem; line-height: 1.8;"></div>
+                                </div>
+                            </div>
+
+                            <!-- Navigation -->
+                            <div style="display: flex; justify-content: space-between; gap: var(--spacing-md);">
+                                <button id="studyModePrev" class="btn btn-secondary" style="flex: 1;">
+                                    <i class="fas fa-chevron-left"></i>
+                                    Previous
+                                </button>
+                                <button id="studyModeNext" class="btn btn-secondary" style="flex: 1;">
+                                    Next
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+
+                            <!-- Complete Message -->
+                            <div id="studyModeComplete" class="hidden" style="text-align: center; padding: 3rem;">
+                                <i class="fas fa-check-circle" style="font-size: 4rem; color: var(--success); margin-bottom: var(--spacing-lg);"></i>
+                                <h2 style="color: var(--success); margin-bottom: var(--spacing-md);">Study Session Complete!</h2>
+                                <p style="color: var(--text-secondary); margin-bottom: var(--spacing-xl);">You've reviewed all cards in the hierarchy.</p>
+                                <button id="restartStudyModeBtn" class="btn btn-primary">
+                                    <i class="fas fa-redo"></i>
+                                    Start Over
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
