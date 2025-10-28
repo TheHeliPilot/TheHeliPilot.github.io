@@ -284,9 +284,7 @@
                 <div id="notesTab" class="project-tab-content active">
                     <div class="notes-toolbar">
                         <div style="display: flex; gap: var(--spacing-md); align-items: center;">
-                            <label style="color: var(--text-secondary); font-size: 0.875rem;">
-                                <i class="fas fa-language"></i> Generation Language:
-                            </label>
+                            <i class="fas fa-language" style="color: var(--text-secondary);"></i>
                             <select id="generationLanguage" class="select-input" style="width: 150px;">
                                 <option value="en">English</option>
                                 <option value="sk">Slovak</option>
@@ -299,7 +297,14 @@
                                 <option value="ru">Russian</option>
                             </select>
                         </div>
-                        <div style="display: flex; gap: var(--spacing-md); margin-left: auto;">
+                        <div style="display: flex; gap: var(--spacing-md); margin-left: auto; align-items: center;">
+                            <label class="toggle-switch" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                <input type="checkbox" id="markdownPreviewToggle" style="display: none;">
+                                <div style="position: relative; width: 40px; height: 20px; background: var(--surface-light); border-radius: 10px; transition: background 0.3s;">
+                                    <div id="markdownToggleSlider" style="position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background: white; border-radius: 50%; transition: transform 0.3s;"></div>
+                                </div>
+                                <span style="font-size: 0.875rem; color: var(--text-secondary);">Preview</span>
+                            </label>
                             <input type="file" id="importNotesFile" accept=".pdf,.docx,.txt,.md" style="display: none;">
                             <button id="importNotesBtn" class="btn btn-secondary">
                                 <i class="fas fa-file-import"></i>
@@ -320,6 +325,7 @@
                         </div>
                     </div>
                     <div id="notesEditor"></div>
+                    <div id="markdownPreview" style="display: none; padding: var(--spacing-xl); background: var(--surface); border-radius: var(--radius-lg); min-height: 400px;"></div>
                 </div>
 
                 <!-- Test Cards Tab -->

@@ -71,6 +71,12 @@ function setupProjectDetailEventListeners() {
         cleanNotesBtn.addEventListener('click', cleanNotesWithAI);
     }
 
+    // Markdown preview toggle
+    const markdownToggle = document.getElementById('markdownPreviewToggle');
+    if (markdownToggle) {
+        markdownToggle.addEventListener('change', toggleMarkdownPreview);
+    }
+
     // Regenerate project button
     const regenerateBtn = document.getElementById('regenerateProjectBtn');
     if (regenerateBtn) {
@@ -1158,20 +1164,37 @@ function renderMindMap() {
 
     // Build nodes and links for force simulation
     function buildForceData(cards) {
+        // Calculate hierarchical initial positions to prevent overlap
+        const levelGroups = {};
+        cards.forEach((card, index) => {
+            const level = card.level || 0;
+            if (!levelGroups[level]) levelGroups[level] = [];
+            levelGroups[level].push(index);
+        });
+
         const nodes = cards.map((card, index) => {
             const name = card.topic || card.term || card.name || card.title || `Card ${index + 1}`;
             const nodeWidth = calculateNodeWidth(name);
+            const level = card.level || 0;
+
+            // Position nodes in a radial layout by level
+            const levelNodes = levelGroups[level];
+            const nodeIndexInLevel = levelNodes.indexOf(index);
+            const angleStep = (2 * Math.PI) / levelNodes.length;
+            const angle = nodeIndexInLevel * angleStep - Math.PI / 2; // Start from top
+            const radius = 100 + level * 150; // Distance from center increases with level
+
             return {
                 id: index,
                 name: name,
                 definition: card.content || card.definition || card.description || '',
-                level: card.level || 0,
+                level: level,
                 color: card.color || '#667eea',
                 parentIndex: card.parentIndex,
                 width: nodeWidth,
                 radius: nodeWidth / 2 + 20, // Half width + padding
-                x: width / 2 + (Math.random() - 0.5) * 300,
-                y: height / 2 + (Math.random() - 0.5) * 300
+                x: width / 2 + Math.cos(angle) * radius,
+                y: height / 2 + Math.sin(angle) * radius
             };
         });
 
@@ -1547,21 +1570,49 @@ function startStudyMode() {
     displayStudyCard();
 }
 
-// Sort cards in hierarchical order (breadth-first)
+// Sort cards in hierarchical order (depth-first - branch by branch)
 function sortCardsHierarchically(cards) {
     const sorted = [];
-    const levels = {};
 
-    // Group by level
-    cards.forEach((card, index) => {
-        const level = card.level || 0;
-        if (!levels[level]) levels[level] = [];
-        levels[level].push({ ...card, originalIndex: index });
+    // Build parent-child relationships
+    const cardsWithIndex = cards.map((card, index) => ({ ...card, originalIndex: index }));
+
+    // Find root nodes (level 0 or no parent)
+    const roots = cardsWithIndex.filter(card => (card.level === 0 || card.parentIndex === null || card.parentIndex === undefined));
+
+    // Depth-first traversal
+    function traverseDFS(parentIndex, currentLevel) {
+        // Get children of this parent at the next level
+        const children = cardsWithIndex.filter(card =>
+            card.parentIndex === parentIndex && !sorted.includes(card)
+        );
+
+        // If no children, try to find by level proximity
+        if (children.length === 0 && currentLevel !== undefined) {
+            const levelChildren = cardsWithIndex.filter(card =>
+                card.level === currentLevel + 1 && !sorted.includes(card)
+            );
+            children.push(...levelChildren);
+        }
+
+        // Process each child and their descendants
+        children.forEach(child => {
+            sorted.push(child);
+            traverseDFS(child.originalIndex, child.level);
+        });
+    }
+
+    // Start with root nodes
+    roots.forEach(root => {
+        sorted.push(root);
+        traverseDFS(root.originalIndex, root.level);
     });
 
-    // Add cards level by level
-    Object.keys(levels).sort((a, b) => a - b).forEach(level => {
-        sorted.push(...levels[level]);
+    // Add any remaining cards that weren't connected
+    cardsWithIndex.forEach(card => {
+        if (!sorted.includes(card)) {
+            sorted.push(card);
+        }
     });
 
     return sorted;
@@ -1701,6 +1752,124 @@ async function cleanNotesWithAI() {
         console.error('Clean notes error:', error);
         showNotification('Failed to clean notes: ' + error.message, 'error');
     }
+}
+
+// Toggle markdown preview
+function toggleMarkdownPreview() {
+    const toggle = document.getElementById('markdownPreviewToggle');
+    const editor = document.getElementById('notesEditor');
+    const preview = document.getElementById('markdownPreview');
+    const slider = document.getElementById('markdownToggleSlider');
+    const toggleBg = slider.parentElement;
+
+    if (!toggle || !editor || !preview || !quillEditor) return;
+
+    if (toggle.checked) {
+        // Show preview
+        const rawText = quillEditor.getText();
+        preview.innerHTML = renderMarkdown(rawText);
+        editor.style.display = 'none';
+        preview.style.display = 'block';
+        slider.style.transform = 'translateX(20px)';
+        toggleBg.style.background = 'var(--primary)';
+    } else {
+        // Show editor
+        editor.style.display = 'block';
+        preview.style.display = 'none';
+        slider.style.transform = 'translateX(0)';
+        toggleBg.style.background = 'var(--surface-light)';
+    }
+}
+
+// Simple markdown renderer
+function renderMarkdown(text) {
+    let html = text;
+
+    // Escape HTML
+    html = html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    // Headers (# ## ### etc)
+    html = html.replace(/^######\s+(.+)$/gm, '<h6 style="margin-top: 1.5rem; margin-bottom: 0.5rem; color: var(--primary);">$1</h6>');
+    html = html.replace(/^#####\s+(.+)$/gm, '<h5 style="margin-top: 1.5rem; margin-bottom: 0.5rem; color: var(--primary);">$1</h5>');
+    html = html.replace(/^####\s+(.+)$/gm, '<h4 style="margin-top: 1.5rem; margin-bottom: 0.5rem; color: var(--primary);">$1</h4>');
+    html = html.replace(/^###\s+(.+)$/gm, '<h3 style="margin-top: 2rem; margin-bottom: 0.75rem; color: var(--primary);">$1</h3>');
+    html = html.replace(/^##\s+(.+)$/gm, '<h2 style="margin-top: 2rem; margin-bottom: 0.75rem; color: var(--primary);">$1</h2>');
+    html = html.replace(/^#\s+(.+)$/gm, '<h1 style="margin-top: 2rem; margin-bottom: 1rem; color: var(--primary);">$1</h1>');
+
+    // Bold **text**
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong style="font-weight: 600;">$1</strong>');
+
+    // Italic *text*
+    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+    // Code `code`
+    html = html.replace(/`(.+?)`/g, '<code style="background: var(--surface-light); padding: 0.2rem 0.4rem; border-radius: 4px; font-family: monospace; font-size: 0.9em;">$1</code>');
+
+    // Links [text](url)
+    html = html.replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" style="color: var(--primary); text-decoration: underline;">$1</a>');
+
+    // Unordered lists (- item)
+    const listRegex = /^- (.+)$/gm;
+    let inList = false;
+    html = html.split('\n').map(line => {
+        if (line.match(/^- /)) {
+            const item = line.replace(/^- /, '');
+            if (!inList) {
+                inList = true;
+                return `<ul style="margin: 0.5rem 0; padding-left: 1.5rem; list-style: disc;"><li style="margin: 0.25rem 0;">${item}</li>`;
+            }
+            return `<li style="margin: 0.25rem 0;">${item}</li>`;
+        } else {
+            if (inList) {
+                inList = false;
+                return `</ul>${line}`;
+            }
+            return line;
+        }
+    }).join('\n');
+
+    // Close any open lists
+    if (inList) {
+        html += '</ul>';
+    }
+
+    // Ordered lists (1. item)
+    const orderedRegex = /^\d+\. /;
+    inList = false;
+    html = html.split('\n').map(line => {
+        if (line.match(orderedRegex)) {
+            const item = line.replace(/^\d+\. /, '');
+            if (!inList) {
+                inList = true;
+                return `<ol style="margin: 0.5rem 0; padding-left: 1.5rem;"><li style="margin: 0.25rem 0;">${item}</li>`;
+            }
+            return `<li style="margin: 0.25rem 0;">${item}</li>`;
+        } else {
+            if (inList) {
+                inList = false;
+                return `</ol>${line}`;
+            }
+            return line;
+        }
+    }).join('\n');
+
+    // Close any open lists
+    if (inList) {
+        html += '</ol>';
+    }
+
+    // Paragraphs (double newline)
+    html = html.split('\n\n').map(para => {
+        if (para.trim() && !para.startsWith('<')) {
+            return `<p style="margin: 1rem 0; line-height: 1.6;">${para}</p>`;
+        }
+        return para;
+    }).join('\n\n');
+
+    // Single line breaks
+    html = html.replace(/\n/g, '<br>');
+
+    return html;
 }
 
 // Helper functions

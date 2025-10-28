@@ -60,23 +60,36 @@ Return ONLY a JSON array with this exact structure:
     "content": "Brief overview of the entire topic (1-2 sentences)",
     "level": 0,
     "parentIndex": null,
-    "category": "primary"
+    "category": "primary",
+    "color": "#667eea"
   },
   {
     "topic": "Main Topic Name",
     "content": "Detailed explanation (2-3 sentences)",
     "level": 1,
     "parentIndex": 0,
-    "category": "secondary"
+    "category": "secondary",
+    "color": "#f093fb"
   },
   {
     "topic": "Subtopic Name",
     "content": "Explanation of subtopic",
     "level": 2,
     "parentIndex": 1,
-    "category": "tertiary"
+    "category": "tertiary",
+    "color": "#4facfe"
   }
 ]
+
+Available colors (choose intelligently based on topic theme and ensure variety):
+- "#667eea" (purple-blue) - Use for overview, introductory, or foundational concepts
+- "#f093fb" (pink) - Use for creative, design, or social topics
+- "#4facfe" (light blue) - Use for technical, logical, or analytical topics
+- "#43e97b" (green) - Use for nature, health, growth, or positive concepts
+- "#fa709a" (coral) - Use for important warnings, key points, or emotional topics
+- "#feca57" (yellow) - Use for energy, attention-grabbing, or important highlights
+- "#ff6b6b" (red) - Use for critical concepts, errors, or urgent information
+- "#48dbfb" (cyan) - Use for communication, flow, or process-related topics
 
 Rules:
 - FIRST CARD MUST BE: An "Overview" card at level 0 with parentIndex null - this is the root of the entire mind map
@@ -88,6 +101,9 @@ Rules:
 - Each card should have a clear, concise topic (3-8 words)
 - Content should be educational and detailed (2-3 sentences)
 - Ensure parentIndex correctly references the index of parent cards
+- Choose colors that make semantic sense for the topic content (e.g., biology = green, technology = blue, warnings = red)
+- Distribute colors evenly across branches to create visual distinction
+- Children of the same parent can have different colors for better visual separation
 - Make sure to create a balanced tree - each branch should have children
 - Return ONLY the JSON array, no markdown formatting
 ${languageNote ? `- ALL content (topic, content fields) must be in the specified language\n` : ''}
