@@ -130,9 +130,6 @@
                 </button>
                 <h2 id="pageTitle">Dashboard</h2>
                 <div class="top-bar-actions">
-                    <button id="darkModeToggle" class="icon-btn" title="Toggle Dark Mode">
-                        <i class="fas fa-moon"></i>
-                    </button>
                     <div class="user-menu">
                         <button class="user-avatar" id="userMenuBtn">
                             <i class="fas fa-user-circle"></i>
@@ -173,15 +170,6 @@
                         <div class="stat-content">
                             <div class="stat-value" id="totalCards">0</div>
                             <div class="stat-label">Total Cards</div>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon">
-                            <i class="fas fa-check-circle"></i>
-                        </div>
-                        <div class="stat-content">
-                            <div class="stat-value" id="masteredCards">0</div>
-                            <div class="stat-label">Mastered</div>
                         </div>
                     </div>
                     <div class="stat-card">
@@ -249,6 +237,10 @@
                     </button>
                     <h2 id="projectDetailTitle">Project Name</h2>
                     <div class="actions-group">
+                        <button id="startStudyModeBtn" class="btn btn-primary">
+                            <i class="fas fa-book-open"></i>
+                            Start Study Session
+                        </button>
                         <button id="startProjectTestBtn" class="btn btn-primary">
                             <i class="fas fa-play"></i>
                             Start Test
@@ -273,10 +265,6 @@
                     <button class="project-tab" data-tab="mindMap">
                         <i class="fas fa-project-diagram"></i>
                         Mind Map
-                    </button>
-                    <button class="project-tab" data-tab="studyMode">
-                        <i class="fas fa-graduation-cap"></i>
-                        Study Mode
                     </button>
                 </div>
 
@@ -387,92 +375,99 @@
                     </div>
                 </div>
 
-                <!-- Study Mode Tab -->
-                <div id="studyModeTab" class="project-tab-content">
-                    <div id="studyModeContainer" style="max-width: 800px; margin: 0 auto; padding: var(--spacing-xl);">
-                        <!-- Study Mode Controls -->
-                        <div style="text-align: center; margin-bottom: var(--spacing-xl);">
-                            <button id="startStudyModeBtn" class="btn btn-primary" style="font-size: 1.125rem; padding: 1rem 2rem;">
-                                <i class="fas fa-play-circle"></i>
-                                Start Study Session
+            </div>
+
+            <!-- Study Mode Page -->
+            <div id="studyModePage" class="page">
+                <div class="page-header">
+                    <h2 id="studyModeTitle" style="margin: 0;">Study Session</h2>
+                </div>
+
+                <div id="studyModeContainer" style="max-width: 800px; margin: 0 auto; padding: var(--spacing-xl);">
+                    <!-- Study Card Display -->
+                    <div id="studyModeCard" style="position: relative;">
+                        <!-- Progress Bar -->
+                        <div style="margin-bottom: var(--spacing-lg);">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: var(--spacing-sm); color: var(--text-secondary); font-size: 0.875rem;">
+                                <span>Progress</span>
+                                <span id="studyModeProgress">0 / 0</span>
+                            </div>
+                            <div style="height: 8px; background: var(--surface-light); border-radius: 4px; overflow: hidden;">
+                                <div id="studyModeProgressBar" style="height: 100%; background: linear-gradient(90deg, var(--primary), var(--secondary)); width: 0%; transition: width 0.3s ease;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Card Stack Container -->
+                        <div id="studyCardContainer" style="position: relative; margin-bottom: var(--spacing-xl); min-height: 500px; perspective: 1000px;">
+                            <!-- Background Cards (for stacking effect) -->
+                            <div class="study-card-stack" data-position="back-3" style="position: absolute; top: 0; left: 0; width: 100%; background: var(--surface); border: 2px solid var(--border); border-radius: var(--radius-xl); padding: 3rem; box-shadow: var(--shadow-xl); transform: translateY(12px) scale(0.94); opacity: 0.3; pointer-events: none;"></div>
+                            <div class="study-card-stack" data-position="back-2" style="position: absolute; top: 0; left: 0; width: 100%; background: var(--surface); border: 2px solid var(--border); border-radius: var(--radius-xl); padding: 3rem; box-shadow: var(--shadow-xl); transform: translateY(8px) scale(0.96); opacity: 0.5; pointer-events: none;"></div>
+                            <div class="study-card-stack" data-position="back-1" style="position: absolute; top: 0; left: 0; width: 100%; background: var(--surface); border: 2px solid var(--border); border-radius: var(--radius-xl); padding: 3rem; box-shadow: var(--shadow-xl); transform: translateY(4px) scale(0.98); opacity: 0.7; pointer-events: none;"></div>
+
+                            <!-- Active Card -->
+                            <div id="activeStudyCard" class="study-card-active" style="position: relative; top: 0; left: 0; background: var(--surface); border: 2px solid var(--border); border-radius: var(--radius-xl); padding: 3rem; box-shadow: var(--shadow-xl); z-index: 10;">
+                                <!-- Level Badge -->
+                                <div style="text-align: center; margin-bottom: var(--spacing-lg);">
+                                    <div id="studyCardLevel" style="display: inline-block; padding: 0.5rem 1rem; background: var(--primary); color: white; border-radius: var(--radius-md); font-size: 0.875rem;"></div>
+                                </div>
+
+                                <!-- Topic -->
+                                <h2 id="studyCardTopic" style="color: var(--primary); margin-bottom: var(--spacing-lg); font-size: 2rem; text-align: center;"></h2>
+
+                                <!-- Divider -->
+                                <div style="height: 2px; background: linear-gradient(90deg, transparent, var(--border), transparent); margin: var(--spacing-lg) 0;"></div>
+
+                                <!-- Content -->
+                                <div id="studyCardContent" style="color: var(--text); font-size: 1.125rem; line-height: 1.8;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Mastery Level Buttons -->
+                        <div style="margin-bottom: var(--spacing-lg);">
+                            <div style="text-align: center; margin-bottom: var(--spacing-sm); color: var(--text-secondary); font-size: 0.875rem;">
+                                How well do you know this?
+                            </div>
+                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--spacing-sm);">
+                                <button class="btn mastery-btn" data-mastery="weak" style="background: #ff6b6b; border: none;">
+                                    <i class="fas fa-times-circle"></i> Weak
+                                </button>
+                                <button class="btn mastery-btn" data-mastery="learning" style="background: #feca57; border: none;">
+                                    <i class="fas fa-book-reader"></i> Learning
+                                </button>
+                                <button class="btn mastery-btn" data-mastery="good" style="background: #48dbfb; border: none;">
+                                    <i class="fas fa-thumbs-up"></i> Good
+                                </button>
+                                <button class="btn mastery-btn" data-mastery="mastered" style="background: #43e97b; border: none;">
+                                    <i class="fas fa-check-circle"></i> Mastered
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Navigation -->
+                        <div style="display: flex; justify-content: space-between; gap: var(--spacing-md);">
+                            <button id="studyModePrev" class="btn btn-secondary" style="flex: 1;">
+                                <i class="fas fa-chevron-left"></i>
+                                Previous
+                            </button>
+                            <button id="studyModeNext" class="btn btn-secondary" style="flex: 1;">
+                                Next
+                                <i class="fas fa-chevron-right"></i>
                             </button>
                         </div>
 
-                        <!-- Study Card Display -->
-                        <div id="studyModeCard" class="hidden" style="position: relative;">
-                            <!-- Progress Bar -->
-                            <div style="margin-bottom: var(--spacing-lg);">
-                                <div style="display: flex; justify-content: space-between; margin-bottom: var(--spacing-sm); color: var(--text-secondary); font-size: 0.875rem;">
-                                    <span>Progress</span>
-                                    <span id="studyModeProgress">0 / 0</span>
-                                </div>
-                                <div style="height: 8px; background: var(--surface-light); border-radius: 4px; overflow: hidden;">
-                                    <div id="studyModeProgressBar" style="height: 100%; background: linear-gradient(90deg, var(--primary), var(--secondary)); width: 0%; transition: width 0.3s ease;"></div>
-                                </div>
-                            </div>
-
-                            <!-- Card (No Flipping - All Visible) -->
-                            <div id="studyCardContainer" style="margin-bottom: var(--spacing-xl);">
-                                <div style="background: var(--surface); border: 2px solid var(--border); border-radius: var(--radius-xl); padding: 3rem; box-shadow: var(--shadow-xl);">
-                                    <!-- Level Badge -->
-                                    <div style="text-align: center; margin-bottom: var(--spacing-lg);">
-                                        <div id="studyCardLevel" style="display: inline-block; padding: 0.5rem 1rem; background: var(--primary); color: white; border-radius: var(--radius-md); font-size: 0.875rem;"></div>
-                                    </div>
-
-                                    <!-- Topic -->
-                                    <h2 id="studyCardTopic" style="color: var(--primary); margin-bottom: var(--spacing-lg); font-size: 2rem; text-align: center;"></h2>
-
-                                    <!-- Divider -->
-                                    <div style="height: 2px; background: linear-gradient(90deg, transparent, var(--border), transparent); margin: var(--spacing-lg) 0;"></div>
-
-                                    <!-- Content -->
-                                    <div id="studyCardContent" style="color: var(--text); font-size: 1.125rem; line-height: 1.8;"></div>
-                                </div>
-                            </div>
-
-                            <!-- Mastery Level Buttons -->
-                            <div style="margin-bottom: var(--spacing-lg);">
-                                <div style="text-align: center; margin-bottom: var(--spacing-sm); color: var(--text-secondary); font-size: 0.875rem;">
-                                    How well do you know this?
-                                </div>
-                                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--spacing-sm);">
-                                    <button class="btn mastery-btn" data-mastery="weak" style="background: #ff6b6b; border: none;">
-                                        <i class="fas fa-times-circle"></i> Weak
-                                    </button>
-                                    <button class="btn mastery-btn" data-mastery="learning" style="background: #feca57; border: none;">
-                                        <i class="fas fa-book-reader"></i> Learning
-                                    </button>
-                                    <button class="btn mastery-btn" data-mastery="good" style="background: #48dbfb; border: none;">
-                                        <i class="fas fa-thumbs-up"></i> Good
-                                    </button>
-                                    <button class="btn mastery-btn" data-mastery="mastered" style="background: #43e97b; border: none;">
-                                        <i class="fas fa-check-circle"></i> Mastered
-                                    </button>
-                                </div>
-                            </div>
-
-                            <!-- Navigation -->
-                            <div style="display: flex; justify-content: space-between; gap: var(--spacing-md);">
-                                <button id="studyModePrev" class="btn btn-secondary" style="flex: 1;">
-                                    <i class="fas fa-chevron-left"></i>
-                                    Previous
-                                </button>
-                                <button id="studyModeNext" class="btn btn-secondary" style="flex: 1;">
-                                    Next
-                                    <i class="fas fa-chevron-right"></i>
-                                </button>
-                            </div>
-
-                            <!-- Complete Message -->
-                            <div id="studyModeComplete" class="hidden" style="text-align: center; padding: 3rem;">
-                                <i class="fas fa-check-circle" style="font-size: 4rem; color: var(--success); margin-bottom: var(--spacing-lg);"></i>
-                                <h2 style="color: var(--success); margin-bottom: var(--spacing-md);">Study Session Complete!</h2>
-                                <p style="color: var(--text-secondary); margin-bottom: var(--spacing-xl);">You've reviewed all cards in the hierarchy.</p>
-                                <button id="restartStudyModeBtn" class="btn btn-primary">
-                                    <i class="fas fa-redo"></i>
-                                    Start Over
-                                </button>
-                            </div>
+                        <!-- Complete Message -->
+                        <div id="studyModeComplete" class="hidden" style="text-align: center; padding: 3rem;">
+                            <i class="fas fa-check-circle" style="font-size: 4rem; color: var(--success); margin-bottom: var(--spacing-lg);"></i>
+                            <h2 style="color: var(--success); margin-bottom: var(--spacing-md);">Study Session Complete!</h2>
+                            <p style="color: var(--text-secondary); margin-bottom: var(--spacing-xl);">You've reviewed all cards in the hierarchy.</p>
+                            <button id="restartStudyModeBtn" class="btn btn-primary">
+                                <i class="fas fa-redo"></i>
+                                Start Over
+                            </button>
+                            <button id="closeStudyModeBtn" class="btn btn-secondary" style="margin-left: var(--spacing-md);">
+                                <i class="fas fa-times"></i>
+                                Close
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -724,28 +719,6 @@
                     </div>
                 </div>
 
-                <div class="account-section">
-                    <h3>Security</h3>
-                    <button id="changePasswordBtn" class="btn btn-secondary">Change Password</button>
-                    <button id="managePasskeysBtn" class="btn btn-secondary">Manage Passkeys</button>
-                </div>
-
-                <div class="account-section">
-                    <h3>Preferences</h3>
-                    <div class="form-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="darkModePreference">
-                            <span>Dark mode</span>
-                        </label>
-                    </div>
-                    <div class="form-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="emailNotifications">
-                            <span>Email notifications</span>
-                        </label>
-                    </div>
-                </div>
-
                 <div class="account-section danger-zone">
                     <h3>Danger Zone</h3>
                     <button id="deleteAccountBtn" class="btn btn-danger">Delete Account</button>
@@ -771,7 +744,7 @@
                             <option value="hard">Hard</option>
                             <option value="mixed">Mixed</option>
                         </select>
-                        <input type="text" id="exploreSearch" class="text-input" placeholder="Search quizzes..." style="flex: 1;">
+                        <input type="text" id="exploreSearch" class="text-input" placeholder="Search quizzes..." style="flex: 1; min-width: 200px;">
                     </div>
                 </div>
                 <div id="publicProjectsList" class="projects-grid">
@@ -780,6 +753,22 @@
                         <p>No public quizzes available yet. Check back soon!</p>
                     </div>
                 </div>
+            </div>
+
+            <!-- Public Quiz Page -->
+            <div id="publicQuizPage" class="page">
+                <div class="page-header">
+                    <h2 id="publicQuizPageTitle" style="margin: 0;">Quiz</h2>
+                </div>
+                <div id="publicQuizPageContent"></div>
+            </div>
+
+            <!-- Project Test Page -->
+            <div id="projectTestPage" class="page">
+                <div class="page-header">
+                    <h2 id="projectTestPageTitle" style="margin: 0;">Test</h2>
+                </div>
+                <div id="projectTestPageContent"></div>
             </div>
 
             <!-- Dev Dashboard Page -->
@@ -1260,12 +1249,6 @@
                     <label>Tags (comma-separated)</label>
                     <input type="text" id="publicProjectTags" class="text-input" placeholder="biology, cells, dna">
                 </div>
-                <div class="form-group">
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="publicProjectPublished">
-                        <span>Publish immediately</span>
-                    </label>
-                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" data-modal="publicProjectModal">Cancel</button>
@@ -1432,7 +1415,7 @@
     <!-- Add Test Card Modal -->
     <div id="addTestCardModal" class="modal hidden">
         <div class="modal-backdrop"></div>
-        <div class="modal-content modal-lg">
+        <div class="modal-content">
             <div class="modal-header">
                 <h3><i class="fas fa-layer-group"></i> Add Test Card</h3>
                 <button class="modal-close" data-modal="addTestCardModal">
@@ -1447,6 +1430,9 @@
 
                 <div class="form-group">
                     <label>Answer Options</label>
+                    <p style="color: var(--text-muted); font-size: 0.875rem; margin-bottom: var(--spacing-sm);">
+                        <i class="fas fa-info-circle"></i> Select the correct answer by clicking the radio button
+                    </p>
                     <div class="answer-options">
                         <div class="answer-option">
                             <input type="radio" name="testCardCorrect" value="0" checked>
@@ -1479,9 +1465,9 @@
                 <div class="form-group">
                     <label>Difficulty</label>
                     <select id="testCardDifficulty" class="select-input">
-                        <option value="easy">Easy</option>
-                        <option value="medium" selected>Medium</option>
-                        <option value="hard">Hard</option>
+                        <option value="easy">◯ Easy</option>
+                        <option value="medium" selected>◉ Medium</option>
+                        <option value="hard">⬤ Hard</option>
                     </select>
                 </div>
             </div>
@@ -1561,6 +1547,23 @@
                 <button id="saveStudyCardBtn" class="btn btn-primary">
                     <i class="fas fa-save"></i> Save Study Card
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Confirmation Modal -->
+    <div id="confirmModal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content" style="max-width: 450px;">
+            <div class="modal-header">
+                <h3 id="confirmModalTitle">Confirm Action</h3>
+            </div>
+            <div class="modal-body">
+                <p id="confirmModalMessage" style="color: var(--text-secondary); line-height: 1.6;"></p>
+            </div>
+            <div class="modal-footer">
+                <button id="confirmModalCancel" class="btn btn-secondary">Cancel</button>
+                <button id="confirmModalConfirm" class="btn btn-danger">Delete</button>
             </div>
         </div>
     </div>

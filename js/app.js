@@ -234,6 +234,8 @@ function initNavigation() {
                     if (isAdminUser) {
                         await loadPublicProjects();
                         await loadAdminAnalytics();
+                        // Load users tab by default
+                        loadAllUsers();
                     } else {
                         showNotification('Admin access required', 'error');
                     }
@@ -261,7 +263,7 @@ async function loadUserData() {
         loadProjects(),
         loadCards()
     ]);
-    updateDashboard();
+    await updateDashboard();
     await updateProUI(); // Update UI with generation limits
 }
 
@@ -443,18 +445,30 @@ async function loadCards() {
     }
 }
 
-function updateDashboard() {
+async function updateDashboard() {
     const totalProjects = projects.length;
     const totalCards = cards.length;
-    const masteredCards = cards.filter(c => c.mastered).length;
     const easyCards = cards.filter(c => (c.difficulty || 'medium') === 'easy').length;
     const mediumCards = cards.filter(c => (c.difficulty || 'medium') === 'medium').length;
     const hardCards = cards.filter(c => (c.difficulty || 'medium') === 'hard').length;
 
     document.getElementById('totalProjects').textContent = totalProjects;
     document.getElementById('totalCards').textContent = totalCards;
-    document.getElementById('masteredCards').textContent = masteredCards;
-    document.getElementById('studyStreak').textContent = '0';
+
+    // Load and display actual streak from database
+    if (currentUser) {
+        try {
+            const streakRef = ref(window.db, `users/${currentUser.uid}/streak`);
+            const snapshot = await get(streakRef);
+            const streakData = snapshot.exists() ? snapshot.val() : { currentStreak: 0 };
+            document.getElementById('studyStreak').textContent = streakData.currentStreak || 0;
+        } catch (error) {
+            console.error('Error loading streak:', error);
+            document.getElementById('studyStreak').textContent = '0';
+        }
+    } else {
+        document.getElementById('studyStreak').textContent = '0';
+    }
     document.getElementById('easyCards').textContent = easyCards;
     document.getElementById('mediumCards').textContent = mediumCards;
     document.getElementById('hardCards').textContent = hardCards;
@@ -657,10 +671,12 @@ function getDifficultyBadge(difficulty) {
     const colors = {
         easy: { bg: 'rgba(29, 185, 84, 0.15)', text: '#1db954', border: '#1db954' },
         medium: { bg: 'rgba(255, 173, 102, 0.15)', text: '#ffad66', border: '#ffad66' },
-        hard: { bg: 'rgba(255, 92, 92, 0.15)', text: '#ff5c5c', border: '#ff5c5c' }
+        hard: { bg: 'rgba(255, 92, 92, 0.15)', text: '#ff5c5c', border: '#ff5c5c' },
+        mixed: { bg: 'rgba(95, 168, 255, 0.15)', text: '#5fa8ff', border: '#5fa8ff' }
     };
-    const style = colors[diff];
-    const icon = diff === 'easy' ? '○' : diff === 'medium' ? '◐' : '●';
+    // Fallback to medium if difficulty is not recognized
+    const style = colors[diff] || colors.medium;
+    const icon = diff === 'easy' ? '○' : diff === 'medium' ? '◐' : diff === 'hard' ? '●' : '◉';
 
     return `<span style="display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.25rem 0.5rem; background: ${style.bg}; color: ${style.text}; border: 1px solid ${style.border}; border-radius: 6px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase;">${icon} ${diff}</span>`;
 }
@@ -1879,9 +1895,18 @@ function initMobileMenu() {
 
 function initDarkMode() {
     const darkModeToggle = document.getElementById('darkModeToggle');
-    darkModeToggle.addEventListener('click', () => {
-        showNotification('Dark mode is always on!', 'info');
-    });
+    if (darkModeToggle) {
+        darkModeToggle.addEventListener('click', () => {
+            showNotification('Dark mode is always on!', 'info');
+        });
+    }
+
+    const darkModePreference = document.getElementById('darkModePreference');
+    if (darkModePreference) {
+        darkModePreference.addEventListener('change', () => {
+            showNotification('Dark mode is always on!', 'info');
+        });
+    }
 }
 
 // ============================================
@@ -2006,7 +2031,6 @@ function initDevDashboard() {
             document.getElementById('publicProjectCategory').value = 'science';
             document.getElementById('publicProjectDifficulty').value = 'medium';
             document.getElementById('publicProjectTags').value = '';
-            document.getElementById('publicProjectPublished').checked = false;
             openModal('publicProjectModal');
         });
     }
@@ -2018,7 +2042,6 @@ function initDevDashboard() {
             const category = document.getElementById('publicProjectCategory').value;
             const difficulty = document.getElementById('publicProjectDifficulty').value;
             const tags = document.getElementById('publicProjectTags').value.split(',').map(t => t.trim()).filter(t => t);
-            const published = document.getElementById('publicProjectPublished').checked;
 
             if (!name) {
                 showNotification('Please enter a project name', 'error');
@@ -2032,7 +2055,6 @@ function initDevDashboard() {
                     category,
                     difficulty,
                     tags,
-                    published,
                     createdBy: currentUser.uid,
                     creatorName: currentUser.displayName || currentUser.email.split('@')[0],
                     cardCount: 0,
@@ -2042,9 +2064,15 @@ function initDevDashboard() {
                 };
 
                 if (editingPublicProject) {
-                    await set(ref(window.db, `publicProjects/${editingPublicProject}`), { ...projectData, cardCount: publicProjects.find(p => p.id === editingPublicProject).cardCount });
+                    // When editing, preserve the existing published status
+                    const existingProject = publicProjects.find(p => p.id === editingPublicProject);
+                    projectData.published = existingProject?.published || false;
+                    projectData.cardCount = existingProject?.cardCount || 0;
+                    await set(ref(window.db, `publicProjects/${editingPublicProject}`), projectData);
                     showNotification('Public project updated!', 'success');
                 } else {
+                    // New projects are created as drafts by default
+                    projectData.published = false;
                     await push(ref(window.db, 'publicProjects'), projectData);
                     showNotification('Public project created!', 'success');
                 }
@@ -2061,7 +2089,16 @@ function initDevDashboard() {
 
 window.editPublicProject = async function(id) {
     const project = publicProjects.find(p => p.id === id);
-    if (!project) return;
+    if (!project) {
+        showNotification('Project not found', 'error');
+        return;
+    }
+
+    // Check permissions - allow if user is admin, dev, or project owner
+    if (!isAdminUser && !isDevUser && project.createdBy !== currentUser?.uid) {
+        showNotification('You do not have permission to edit this project', 'error');
+        return;
+    }
 
     editingPublicProject = id;
     document.getElementById('publicProjectModalTitle').textContent = 'Edit Public Project';
@@ -2070,11 +2107,18 @@ window.editPublicProject = async function(id) {
     document.getElementById('publicProjectCategory').value = project.category;
     document.getElementById('publicProjectDifficulty').value = project.difficulty;
     document.getElementById('publicProjectTags').value = (project.tags || []).join(', ');
-    document.getElementById('publicProjectPublished').checked = project.published;
     openModal('publicProjectModal');
 };
 
 window.togglePublish = async function(id, publish) {
+    const project = publicProjects.find(p => p.id === id);
+
+    // Check permissions - allow if user is admin, dev, or project owner
+    if (!isAdminUser && !isDevUser && project?.createdBy !== currentUser?.uid) {
+        showNotification('You do not have permission to modify this project', 'error');
+        return;
+    }
+
     try {
         await update(ref(window.db, `publicProjects/${id}`), { published: publish });
         showNotification(publish ? 'Project published!' : 'Project unpublished', 'success');
@@ -2085,7 +2129,22 @@ window.togglePublish = async function(id, publish) {
 };
 
 window.deletePublicProject = async function(id) {
-    if (!confirm('Delete this public project? This cannot be undone.')) return;
+    const project = publicProjects.find(p => p.id === id);
+
+    // Check permissions - allow if user is admin, dev, or project owner
+    if (!isAdminUser && !isDevUser && project?.createdBy !== currentUser?.uid) {
+        showNotification('You do not have permission to delete this project', 'error');
+        return;
+    }
+
+    const confirmed = await showConfirmDialog(
+        'Delete Public Project',
+        `Are you sure you want to delete "${project?.name || 'this project'}"? This will permanently delete the project and all its cards. This action cannot be undone.`,
+        'Delete Project'
+    );
+
+    if (!confirmed) return;
+
     try {
         await remove(ref(window.db, `publicProjects/${id}`));
         await remove(ref(window.db, `publicProjectResults/${id}`));
@@ -2104,11 +2163,20 @@ let currentPublicProjectId = null;
 let editingPublicCardId = null;
 
 window.managePublicCards = async function(projectId) {
-    currentPublicProjectId = projectId;
     const project = publicProjects.find(p => p.id === projectId);
 
-    if (!project) return;
+    if (!project) {
+        showNotification('Project not found', 'error');
+        return;
+    }
 
+    // Check permissions - allow if user is admin, dev, or project owner
+    if (!isAdminUser && !isDevUser && project.createdBy !== currentUser?.uid) {
+        showNotification('You do not have permission to manage this project', 'error');
+        return;
+    }
+
+    currentPublicProjectId = projectId;
     document.getElementById('publicCardsModalTitle').textContent = `Manage Cards - ${project.name}`;
     openModal('publicCardsModal');
     await loadPublicProjectCards(projectId);
@@ -2116,12 +2184,19 @@ window.managePublicCards = async function(projectId) {
 
 async function loadPublicProjectCards(projectId) {
     try {
+        console.log('Loading cards for project:', projectId);
         const cardsRef = ref(window.db, `publicProjects/${projectId}/cards`);
         const snapshot = await get(cardsRef);
+        console.log('Cards snapshot exists?', snapshot.exists());
+        console.log('Cards data:', snapshot.val());
         const cardsList = document.getElementById('publicCardsList');
 
         if (!snapshot.exists()) {
             cardsList.innerHTML = '<div class="empty-state"><i class="fas fa-layer-group"></i><p>No cards yet. Add your first card!</p></div>';
+            console.error('No cards found at path:', `publicProjects/${projectId}/cards`);
+
+            // Fix the card count in the database if it's wrong
+            await updatePublicProjectCardCount(projectId, 0);
             return;
         }
 
@@ -2273,6 +2348,14 @@ function initPublicCardsManagement() {
 }
 
 window.editPublicCard = async function(cardId) {
+    const project = publicProjects.find(p => p.id === currentPublicProjectId);
+
+    // Check permissions - allow if user is admin, dev, or project owner
+    if (!isAdminUser && !isDevUser && project?.createdBy !== currentUser?.uid) {
+        showNotification('You do not have permission to edit this card', 'error');
+        return;
+    }
+
     try {
         const cardRef = ref(window.db, `publicProjects/${currentPublicProjectId}/cards/${cardId}`);
         const snapshot = await get(cardRef);
@@ -2300,7 +2383,21 @@ window.editPublicCard = async function(cardId) {
 };
 
 window.deletePublicCard = async function(cardId) {
-    if (!confirm('Delete this card?')) return;
+    const project = publicProjects.find(p => p.id === currentPublicProjectId);
+
+    // Check permissions - allow if user is admin, dev, or project owner
+    if (!isAdminUser && !isDevUser && project?.createdBy !== currentUser?.uid) {
+        showNotification('You do not have permission to delete this card', 'error');
+        return;
+    }
+
+    const confirmed = await showConfirmDialog(
+        'Delete Card',
+        'Are you sure you want to delete this quiz question? This action cannot be undone.',
+        'Delete Card'
+    );
+
+    if (!confirmed) return;
 
     try {
         await remove(ref(window.db, `publicProjects/${currentPublicProjectId}/cards/${cardId}`));
@@ -2316,14 +2413,31 @@ window.deletePublicCard = async function(cardId) {
 // PUBLIC QUIZ TAKING
 // ============================================
 
+function showPublicQuizPage() {
+    document.querySelectorAll('.page').forEach(page => {
+        page.classList.remove('active');
+        page.classList.add('hidden');
+    });
+    const targetPage = document.getElementById('publicQuizPage');
+    if (targetPage) {
+        targetPage.classList.add('active');
+        targetPage.classList.remove('hidden');
+    }
+}
+
 window.startPublicQuiz = async function(projectId) {
     const project = publicProjects.find(p => p.id === projectId);
     if (!project) return;
 
     try {
+        console.log('Starting quiz for project:', projectId);
         const cardsSnapshot = await get(ref(window.db, `publicProjects/${projectId}/cards`));
+        console.log('Cards snapshot exists?', cardsSnapshot.exists());
+        console.log('Cards data:', cardsSnapshot.val());
+
         if (!cardsSnapshot.exists()) {
             showNotification('This quiz has no questions yet', 'error');
+            console.error('No cards found at path:', `publicProjects/${projectId}/cards`);
             return;
         }
 
@@ -2352,8 +2466,8 @@ window.startPublicQuiz = async function(projectId) {
             answers: [] // Track user answers
         };
 
-        document.getElementById('publicQuizTitle').textContent = project.name;
-        openModal('publicQuizModal');
+        document.getElementById('publicQuizPageTitle').textContent = project.name;
+        showPublicQuizPage();
         showPublicQuestion();
     } catch (error) {
         console.error('Error starting quiz:', error);
@@ -2365,7 +2479,7 @@ function showPublicQuestion() {
     if (!currentPublicQuiz) return;
 
     const card = currentPublicQuiz.cards[currentPublicQuiz.currentIndex];
-    const content = document.getElementById('publicQuizContent');
+    const content = document.getElementById('publicQuizPageContent');
 
     content.innerHTML = `
         <div class="test-header">
@@ -2382,9 +2496,14 @@ function showPublicQuestion() {
                     </button>
                 `).join('')}
             </div>
-            <div class="feedback" id="publicFeedback"></div>
-            <div class="test-actions">
-                <button id="nextPublicQuestionBtn" class="btn btn-primary hidden" onclick="window.nextPublicQuestion()">Next Question</button>
+            <div class="feedback hidden" id="publicFeedback"></div>
+            <div class="test-actions" style="position: relative; display: flex; justify-content: center; align-items: center; min-height: 48px;">
+                <button id="nextPublicQuestionBtn" class="btn btn-primary hidden" onclick="window.nextPublicQuestion()">
+                    <i class="fas fa-arrow-right"></i> Next Question
+                </button>
+                <button class="btn btn-primary" onclick="window.exitPublicQuiz()" style="position: absolute; right: 0; background: var(--danger); border-color: var(--danger);">
+                    <i class="fas fa-sign-out-alt"></i> Exit Test
+                </button>
             </div>
         </div>
     `;
@@ -2399,6 +2518,7 @@ window.selectPublicAnswer = async function(selectedIdx) {
     buttons.forEach(btn => btn.disabled = true);
 
     // Show loading state
+    feedback.classList.remove('hidden');
     feedback.innerHTML = '<div class="spinner" style="width: 20px; height: 20px;"></div>';
 
     try {
@@ -2442,11 +2562,13 @@ window.selectPublicAnswer = async function(selectedIdx) {
 
         if (isCorrect) currentPublicQuiz.score++;
 
+        feedback.classList.remove('hidden');
         feedback.classList.add(isCorrect ? 'correct' : 'incorrect');
         feedback.innerHTML = `<strong>${isCorrect ? 'Correct!' : 'Incorrect'}</strong>${result.explanation ? `<p style="margin-top: 0.5rem;">${escapeHtml(result.explanation)}</p>` : ''}`;
         document.getElementById('nextPublicQuestionBtn').classList.remove('hidden');
     } catch (error) {
         console.error('Error validating answer:', error);
+        feedback.classList.remove('hidden');
         feedback.innerHTML = '<strong style="color: var(--danger);">Error validating answer. Please try again.</strong>';
         buttons.forEach(btn => btn.disabled = false);
     }
@@ -2486,7 +2608,7 @@ async function showPublicQuizResults() {
         console.error('Error saving results:', error);
     }
 
-    document.getElementById('publicQuizContent').innerHTML = `
+    document.getElementById('publicQuizPageContent').innerHTML = `
         <div class="results-card">
             <div class="results-icon"><i class="fas fa-trophy"></i></div>
             <h3>Quiz Complete!</h3>
@@ -2495,15 +2617,36 @@ async function showPublicQuizResults() {
                 <div class="score-percentage">${percentage}%</div>
             </div>
             <div class="results-actions">
-                <button class="btn btn-primary" onclick="window.closePublicQuiz()">Close</button>
+                <button class="btn btn-primary" onclick="window.closePublicQuiz()">Close Test</button>
             </div>
         </div>
     `;
 }
 
+window.exitPublicQuiz = function() {
+    if (!currentPublicQuiz) return;
+    // Show results screen early
+    showPublicQuizResults();
+};
+
 window.closePublicQuiz = function() {
     currentPublicQuiz = null;
-    closeModal('publicQuizModal');
+    // Navigate back to explore page
+    document.querySelectorAll('.page').forEach(page => {
+        page.classList.remove('active');
+        page.classList.add('hidden');
+    });
+    const explorePage = document.getElementById('explorePage');
+    if (explorePage) {
+        explorePage.classList.add('active');
+        explorePage.classList.remove('hidden');
+    }
+    // Update nav active state
+    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+    const exploreLink = document.querySelector('.nav-link[data-page="explore"]');
+    if (exploreLink) {
+        exploreLink.classList.add('active');
+    }
 };
 
 // ============================================
@@ -2566,14 +2709,20 @@ function initAdminConsole() {
             tab.classList.add('active');
             document.querySelectorAll('.admin-tab-content').forEach(c => c.classList.remove('active'));
 
-            const targetTab = document.getElementById(tab.dataset.tab + 'Tab');
+            // Special case for projects tab which has a different ID
+            let tabId = tab.dataset.tab + 'Tab';
+            if (tab.dataset.tab === 'projects') {
+                tabId = 'projectsAdminTab';
+            }
+
+            const targetTab = document.getElementById(tabId);
             if (targetTab) {
                 targetTab.classList.add('active');
             }
 
             if (tab.dataset.tab === 'analytics') loadAdminAnalytics();
             if (tab.dataset.tab === 'devs') loadDevManagement();
-            if (tab.dataset.tab === 'projects') (async () => await loadProjectsManagement())();
+            if (tab.dataset.tab === 'projects') loadProjectsManagement();
             if (tab.dataset.tab === 'users') loadAllUsers();
         });
     });
@@ -2593,9 +2742,14 @@ function initAdminConsole() {
         });
     }
 
-    // Load all users by default
+    // Note: Users are now loaded when navigating to admin page
+    // This setTimeout is kept as a fallback for direct page access
     setTimeout(() => {
-        if (isAdminUser) loadAllUsers();
+        const usersList = document.getElementById('adminUsersList');
+        // Only load if list is empty (not already loaded)
+        if (isAdminUser && usersList && !usersList.innerHTML.trim()) {
+            loadAllUsers();
+        }
     }, 500);
 }
 
@@ -2661,7 +2815,8 @@ async function loadProjectsManagement() {
                 <p>Cards: ${p.cardCount || 0} | Attempts: ${p.totalAttempts || 0} | Avg Score: ${p.averageScore || 0}%</p>
                 <p style="font-size: 0.875rem;">${escapeHtml(p.description || '')}</p>
                 <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap;">
-                    <button class="btn btn-secondary" onclick="window.editPublicProject('${p.id}')"><i class="fas fa-edit"></i> Edit</button>
+                    <button class="btn btn-primary" onclick="window.managePublicCards('${p.id}')"><i class="fas fa-layer-group"></i> Manage Cards</button>
+                    <button class="btn btn-secondary" onclick="window.editPublicProject('${p.id}')"><i class="fas fa-edit"></i> Edit Project</button>
                     <button class="btn btn-secondary" onclick="window.togglePublish('${p.id}', ${!p.published})">
                         <i class="fas fa-${p.published ? 'eye-slash' : 'eye'}"></i> ${p.published ? 'Unpublish' : 'Publish'}
                     </button>
@@ -3131,7 +3286,17 @@ async function loadTopStreaksLeaderboard(users) {
 }
 
 async function loadGlobalLeaderboard() {
+    const content = document.getElementById('globalLeaderboard');
+
     try {
+        // Check if user has admin permissions
+        if (!isAdminUser) {
+            if (content) {
+                content.innerHTML = '<div class="empty-state"><i class="fas fa-lock"></i><p>Admin access required</p></div>';
+            }
+            return;
+        }
+
         // Get all users to fetch streak data
         const usersSnapshot = await get(ref(window.db, 'users'));
         const usersData = usersSnapshot.exists() ? usersSnapshot.val() : {};
@@ -3198,8 +3363,64 @@ async function loadGlobalLeaderboard() {
             </table>
         `;
     } catch (error) {
-        console.error('Error loading global leaderboard:', error);
+        // Handle permission errors gracefully
+        if (error.message && error.message.includes('Permission denied')) {
+            console.log('Admin leaderboard access denied - insufficient permissions');
+            if (content) {
+                content.innerHTML = '<div class="empty-state"><i class="fas fa-lock"></i><p>Insufficient permissions to view leaderboard</p></div>';
+            }
+        } else {
+            console.error('Error loading global leaderboard:', error);
+            if (content) {
+                content.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>Error loading leaderboard</p></div>';
+            }
+        }
     }
+}
+
+// ============================================
+// CUSTOM CONFIRMATION DIALOG
+// ============================================
+
+function showConfirmDialog(title, message, confirmText = 'Delete', confirmClass = 'btn-danger') {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('confirmModal');
+        const titleEl = document.getElementById('confirmModalTitle');
+        const messageEl = document.getElementById('confirmModalMessage');
+        const cancelBtn = document.getElementById('confirmModalCancel');
+        const confirmBtn = document.getElementById('confirmModalConfirm');
+
+        titleEl.textContent = title;
+        messageEl.textContent = message;
+        confirmBtn.textContent = confirmText;
+        confirmBtn.className = `btn ${confirmClass}`;
+
+        // Show modal
+        modal.classList.remove('hidden');
+
+        // Handle cancel
+        const handleCancel = () => {
+            modal.classList.add('hidden');
+            cleanup();
+            resolve(false);
+        };
+
+        // Handle confirm
+        const handleConfirm = () => {
+            modal.classList.add('hidden');
+            cleanup();
+            resolve(true);
+        };
+
+        // Cleanup listeners
+        const cleanup = () => {
+            cancelBtn.removeEventListener('click', handleCancel);
+            confirmBtn.removeEventListener('click', handleConfirm);
+        };
+
+        cancelBtn.addEventListener('click', handleCancel);
+        confirmBtn.addEventListener('click', handleConfirm);
+    });
 }
 
 // ============================================

@@ -314,6 +314,67 @@ async function saveNewTestCard() {
     }
 }
 
+// Save edited test card
+async function saveTestCardEdit(cardId) {
+    try {
+        const cardEl = document.querySelector(`.test-card[data-card-id="${cardId}"]`);
+        const questionInput = cardEl.querySelector('.test-card-question');
+        const optionInputs = cardEl.querySelectorAll('.test-card-option');
+        const correctAnswerRadio = cardEl.querySelector(`input[name="testCardCorrect_${cardId}"]:checked`);
+        const explanationInput = cardEl.querySelector('.test-card-explanation');
+        const difficultySelect = cardEl.querySelector('.test-card-difficulty');
+
+        const question = questionInput.value.trim();
+        const options = Array.from(optionInputs).map(input => input.value.trim());
+        const correctAnswer = correctAnswerRadio ? parseInt(correctAnswerRadio.value) : 0;
+        const explanation = explanationInput.value.trim();
+        const difficulty = difficultySelect.value;
+
+        // Validation
+        if (!question) {
+            showNotification('Please enter a question', 'error');
+            return;
+        }
+        if (options.some(opt => !opt)) {
+            showNotification('Please fill in all answer options', 'error');
+            return;
+        }
+
+        const user = window.auth.currentUser;
+        const { ref, update } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
+
+        const cardData = {
+            question: question,
+            options: options,
+            correctAnswer: correctAnswer,
+            explanation: explanation,
+            difficulty: difficulty
+        };
+
+        const cardRef = ref(window.db, `users/${user.uid}/cards/${cardId}`);
+        await update(cardRef, cardData);
+
+        // Update local cards array
+        if (window.cards) {
+            const cardIndex = window.cards.findIndex(c => c.id === cardId);
+            if (cardIndex !== -1) {
+                window.cards[cardIndex] = { ...window.cards[cardIndex], ...cardData };
+            }
+        }
+
+        // Reload cards
+        if (window.loadCards) {
+            await window.loadCards();
+        }
+        loadTestCards(currentProject.id);
+
+        showNotification('Test card updated successfully', 'success');
+    } catch (error) {
+        console.error('Error updating test card:', error);
+        showNotification('Failed to update test card', 'error');
+    }
+}
+
 // Save new study card
 async function saveNewStudyCard() {
     try {
@@ -667,23 +728,99 @@ function loadTestCards(projectId) {
             return;
         }
 
-        testCardsList.innerHTML = projectCards.map(card => `
-            <div class="card-item test-card-item">
-                <div class="card-question">${escapeHtml(card.question)}</div>
-                <div class="card-options">
-                    ${card.options.map((opt, idx) => `
-                        <div class="card-option ${idx === card.correctAnswer ? 'correct' : ''}">
-                            ${String.fromCharCode(65 + idx)}. ${escapeHtml(opt)}
-                        </div>
-                    `).join('')}
-                </div>
-                ${card.explanation ? `
-                    <div style="margin-top: var(--spacing-md); padding: var(--spacing-md); background: var(--surface-light); border-radius: var(--radius-sm); font-size: 0.875rem; color: var(--text-secondary);">
-                        <strong>Explanation:</strong> ${escapeHtml(card.explanation)}
+        testCardsList.innerHTML = projectCards.map((card, index) => `
+            <div class="card-item test-card" data-card-id="${card.id}" data-card-index="${index}">
+                <!-- Display Mode -->
+                <div class="test-card-display">
+                    <div class="card-question">${escapeHtml(card.question)}</div>
+                    <div class="card-options">
+                        ${card.options.map((opt, idx) => `
+                            <div class="card-option ${idx === card.correctAnswer ? 'correct' : ''}">
+                                ${String.fromCharCode(65 + idx)}. ${escapeHtml(opt)}
+                            </div>
+                        `).join('')}
                     </div>
-                ` : ''}
+                    ${card.explanation ? `
+                        <div style="margin-top: var(--spacing-md); padding: var(--spacing-md); background: var(--surface-light); border-radius: var(--radius-sm); font-size: 0.875rem; color: var(--text-secondary);">
+                            <strong>Explanation:</strong> ${escapeHtml(card.explanation)}
+                        </div>
+                    ` : ''}
+                    <div style="font-size: 0.75rem; color: var(--text-muted); font-style: italic; opacity: 0.7; margin-top: var(--spacing-sm);">
+                        Click to edit
+                    </div>
+                </div>
+
+                <!-- Edit Mode -->
+                <div class="test-card-edit-form">
+                    <div class="form-group" style="margin-bottom: var(--spacing-md);">
+                        <label>Question</label>
+                        <textarea class="text-input test-card-question" rows="3">${escapeHtml(card.question)}</textarea>
+                    </div>
+                    <div class="form-group" style="margin-bottom: var(--spacing-md);">
+                        <label>Answer Options</label>
+                        <p style="color: var(--text-muted); font-size: 0.875rem; margin-bottom: var(--spacing-sm);">
+                            <i class="fas fa-info-circle"></i> Select the correct answer
+                        </p>
+                        ${card.options.map((opt, idx) => `
+                            <div class="answer-option" style="display: flex; gap: var(--spacing-sm); margin-bottom: var(--spacing-sm); align-items: center;">
+                                <input type="radio" name="testCardCorrect_${card.id}" value="${idx}" ${idx === card.correctAnswer ? 'checked' : ''}>
+                                <input type="text" class="text-input test-card-option" data-option-index="${idx}" value="${escapeHtml(opt)}" style="flex: 1;">
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="form-group" style="margin-bottom: var(--spacing-md);">
+                        <label>Explanation (Optional)</label>
+                        <textarea class="text-input test-card-explanation" rows="2">${escapeHtml(card.explanation || '')}</textarea>
+                    </div>
+                    <div class="form-group" style="margin-bottom: var(--spacing-md);">
+                        <label>Difficulty</label>
+                        <select class="text-input test-card-difficulty">
+                            <option value="easy" ${card.difficulty === 'easy' ? 'selected' : ''}>◯ Easy</option>
+                            <option value="medium" ${card.difficulty === 'medium' ? 'selected' : ''}>◉ Medium</option>
+                            <option value="hard" ${card.difficulty === 'hard' ? 'selected' : ''}>⬤ Hard</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; gap: var(--spacing-sm); justify-content: flex-end;">
+                        <button class="btn btn-secondary cancel-test-card-edit" data-card-id="${card.id}">
+                            <i class="fas fa-times"></i> Cancel
+                        </button>
+                        <button class="btn btn-primary save-test-card" data-card-id="${card.id}">
+                            <i class="fas fa-save"></i> Save
+                        </button>
+                    </div>
+                </div>
             </div>
         `).join('');
+
+        // Add click handlers for test cards to enable editing
+        document.querySelectorAll('.test-card').forEach(cardEl => {
+            cardEl.addEventListener('click', (e) => {
+                // Don't trigger edit mode if already editing or clicking inside edit form
+                if (cardEl.classList.contains('editing') ||
+                    e.target.closest('.test-card-edit-form')) {
+                    return;
+                }
+                cardEl.classList.add('editing');
+            });
+        });
+
+        // Add save handlers
+        document.querySelectorAll('.save-test-card').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const cardId = btn.dataset.cardId;
+                await saveTestCardEdit(cardId);
+            });
+        });
+
+        // Add cancel handlers
+        document.querySelectorAll('.cancel-test-card-edit').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const cardEl = btn.closest('.test-card');
+                cardEl.classList.remove('editing');
+            });
+        });
 
     } catch (error) {
         console.error('Error loading test cards:', error);
@@ -1586,11 +1723,13 @@ function initStudyMode() {
     const prevBtn = document.getElementById('studyModePrev');
     const nextBtn = document.getElementById('studyModeNext');
     const restartBtn = document.getElementById('restartStudyModeBtn');
+    const closeBtn = document.getElementById('closeStudyModeBtn');
 
     startBtn?.addEventListener('click', startStudyMode);
     prevBtn?.addEventListener('click', () => navigateStudyMode(-1));
     nextBtn?.addEventListener('click', () => navigateStudyMode(1));
     restartBtn?.addEventListener('click', startStudyMode);
+    closeBtn?.addEventListener('click', closeStudyMode);
 
     // Mastery buttons
     document.addEventListener('click', (e) => {
@@ -1616,6 +1755,23 @@ function initStudyMode() {
     });
 }
 
+// Close Study Mode
+function closeStudyMode() {
+    studyModeState.cards = [];
+    studyModeState.currentIndex = 0;
+
+    // Navigate back to project detail page
+    document.querySelectorAll('.page').forEach(page => {
+        page.classList.remove('active');
+        page.classList.add('hidden');
+    });
+    const projectPage = document.getElementById('projectDetailPage');
+    if (projectPage) {
+        projectPage.classList.add('active');
+        projectPage.classList.remove('hidden');
+    }
+}
+
 // Start Study Mode
 function startStudyMode() {
     if (!currentProject || !currentProject.studyCards || currentProject.studyCards.length === 0) {
@@ -1627,8 +1783,18 @@ function startStudyMode() {
     studyModeState.cards = sortCardsHierarchically(currentProject.studyCards);
     studyModeState.currentIndex = 0;
 
-    // Show study mode UI
-    document.getElementById('startStudyModeBtn').style.display = 'none';
+    // Navigate to study mode page
+    document.querySelectorAll('.page').forEach(page => {
+        page.classList.remove('active');
+        page.classList.add('hidden');
+    });
+    const studyPage = document.getElementById('studyModePage');
+    if (studyPage) {
+        studyPage.classList.add('active');
+        studyPage.classList.remove('hidden');
+    }
+
+    document.getElementById('studyModeTitle').textContent = `Study Session - ${currentProject.name}`;
     document.getElementById('studyModeCard').classList.remove('hidden');
     document.getElementById('studyModeComplete').classList.add('hidden');
 
@@ -1712,6 +1878,13 @@ function displayStudyCard() {
     document.getElementById('studyCardTopic').textContent = card.topic || card.term || 'Untitled';
     document.getElementById('studyCardContent').textContent = card.content || card.definition || '';
 
+    // Reset active card transform
+    const activeCard = document.getElementById('activeStudyCard');
+    if (activeCard && !activeCard.classList.contains('slide-in-from-back')) {
+        activeCard.style.transform = '';
+        activeCard.style.opacity = '';
+    }
+
     // Update navigation buttons
     document.getElementById('studyModePrev').disabled = studyModeState.currentIndex === 0;
     document.getElementById('studyModeNext').disabled = studyModeState.currentIndex === totalCards - 1;
@@ -1729,13 +1902,119 @@ function displayStudyCard() {
     });
 }
 
-// Navigate study mode
+// Navigate study mode with animation
 function navigateStudyMode(direction) {
     const newIndex = studyModeState.currentIndex + direction;
     if (newIndex < 0 || newIndex >= studyModeState.cards.length) return;
 
+    const activeCard = document.getElementById('activeStudyCard');
+    const stackCards = document.querySelectorAll('.study-card-stack');
+
+    // Update to next card content immediately
     studyModeState.currentIndex = newIndex;
-    displayStudyCard();
+    const nextCard = studyModeState.cards[studyModeState.currentIndex];
+
+    const levelLabels = {
+        0: 'Overview',
+        1: 'Main Topic',
+        2: 'Subtopic',
+        3: 'Detailed Concept',
+        4: 'Specific Detail'
+    };
+
+    if (direction > 0) {
+        // NEXT: Card slides away to left, next card comes from behind
+        const nextCardElement = stackCards[2]; // back-1 position
+        if (nextCardElement && nextCard) {
+            nextCardElement.innerHTML = `
+                <div style="text-align: center; margin-bottom: var(--spacing-lg);">
+                    <div style="display: inline-block; padding: 0.5rem 1rem; background: ${nextCard.color || '#667eea'}; color: white; border-radius: var(--radius-md); font-size: 0.875rem;">${levelLabels[nextCard.level] || `Level ${nextCard.level}`}</div>
+                </div>
+                <h2 style="color: var(--primary); margin-bottom: var(--spacing-lg); font-size: 2rem; text-align: center;">${nextCard.topic || nextCard.term || 'Untitled'}</h2>
+                <div style="height: 2px; background: linear-gradient(90deg, transparent, var(--border), transparent); margin: var(--spacing-lg) 0;"></div>
+                <div style="color: var(--text); font-size: 1.125rem; line-height: 1.8;">${nextCard.content || nextCard.definition || ''}</div>
+            `;
+        }
+
+        activeCard.classList.add('slide-out-left');
+
+        // Animate stack cards moving up simultaneously
+        stackCards.forEach((card, index) => {
+            const currentPos = parseInt(card.dataset.position.split('-')[1]);
+            if (currentPos > 1) {
+                const newPos = currentPos - 1;
+                animateStackCard(card, currentPos, newPos);
+                card.dataset.position = `back-${newPos}`;
+            } else if (currentPos === 1) {
+                animateStackCard(card, currentPos, 0);
+                card.dataset.position = 'back-0';
+            }
+        });
+    } else {
+        // PREVIOUS: Previous card slides in from left on top of current card
+        // Create a temporary card element to slide in
+        const tempCard = document.createElement('div');
+        tempCard.id = 'tempPreviousCard';
+        tempCard.className = 'study-card-active';
+        tempCard.style.cssText = 'position: absolute; top: 0; left: 0; width: 100%; background: var(--surface); border: 2px solid var(--border); border-radius: var(--radius-xl); padding: 3rem; box-shadow: var(--shadow-xl); z-index: 20; transform: translateX(-100%) translateY(-30px) scale(0.95) rotateZ(-8deg); opacity: 0;';
+        tempCard.innerHTML = `
+            <div style="text-align: center; margin-bottom: var(--spacing-lg);">
+                <div style="display: inline-block; padding: 0.5rem 1rem; background: ${nextCard.color || '#667eea'}; color: white; border-radius: var(--radius-md); font-size: 0.875rem;">${levelLabels[nextCard.level] || `Level ${nextCard.level}`}</div>
+            </div>
+            <h2 style="color: var(--primary); margin-bottom: var(--spacing-lg); font-size: 2rem; text-align: center;">${nextCard.topic || nextCard.term || 'Untitled'}</h2>
+            <div style="height: 2px; background: linear-gradient(90deg, transparent, var(--border), transparent); margin: var(--spacing-lg) 0;"></div>
+            <div style="color: var(--text); font-size: 1.125rem; line-height: 1.8;">${nextCard.content || nextCard.definition || ''}</div>
+        `;
+
+        // Add to container
+        document.getElementById('studyCardContainer').appendChild(tempCard);
+
+        // Trigger slide in animation from top-left (use requestAnimationFrame to ensure it's rendered first)
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                tempCard.style.animation = 'cardSlideInFromTopLeft 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards';
+            });
+        });
+    }
+
+    // Wait for animation to complete, then update main card
+    setTimeout(() => {
+        displayStudyCard();
+
+        // Remove animation classes
+        activeCard.classList.remove('slide-out-left', 'slide-out-right');
+
+        // Remove temp previous card if it exists
+        const tempCard = document.getElementById('tempPreviousCard');
+        if (tempCard) {
+            tempCard.remove();
+        }
+
+        // Reset stack positions
+        stackCards.forEach((card, index) => {
+            card.dataset.position = `back-${3 - index}`;
+            card.style.transform = '';
+            card.style.opacity = '';
+            card.innerHTML = '';
+        });
+    }, 400);
+}
+
+// Animate stack card position
+function animateStackCard(card, fromPos, toPos) {
+    const positions = {
+        0: { y: 0, scale: 1, opacity: 1 },
+        1: { y: 4, scale: 0.98, opacity: 0.7 },
+        2: { y: 8, scale: 0.96, opacity: 0.5 },
+        3: { y: 12, scale: 0.94, opacity: 0.3 }
+    };
+
+    const from = positions[fromPos];
+    const to = positions[toPos];
+
+    card.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+    card.style.transform = `translateY(${to.y}px) scale(${to.scale})`;
+    card.style.opacity = to.opacity;
 }
 
 // Show study complete
@@ -1933,6 +2212,35 @@ function showPage(pageId) {
         targetPage.classList.add('active');
         targetPage.classList.remove('hidden');
     }
+
+    // Update sidebar navigation highlighting
+    const navLinks = document.querySelectorAll('.nav-link');
+    navLinks.forEach(link => link.classList.remove('active'));
+
+    // Map page IDs to navigation items
+    const pageToNavMap = {
+        'dashboardPage': 'dashboard',
+        'projectsPage': 'projects',
+        'projectDetailPage': 'projects', // Project detail should highlight Projects tab
+        'cardsPage': 'cards',
+        'studyPage': 'study',
+        'explorePage': 'explore',
+        'leaderboardPage': 'leaderboard',
+        'devPage': 'dev',
+        'adminPage': 'admin',
+        'accountPage': 'account',
+        'studyModePage': 'projects', // Study mode should also highlight Projects tab
+        'publicQuizPage': 'explore', // Public quiz should highlight Explore tab
+        'projectTestPage': 'projects' // Project test should highlight Projects tab
+    };
+
+    const navPage = pageToNavMap[pageId];
+    if (navPage) {
+        const navLink = document.querySelector(`.nav-link[data-page="${navPage}"]`);
+        if (navLink) {
+            navLink.classList.add('active');
+        }
+    }
 }
 
 function showNotification(message, type = 'success') {
@@ -1950,9 +2258,179 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// Project Test State
+let currentProjectTest = null;
+
 function startProjectTest() {
-    showNotification('Start project test feature coming soon!', 'info');
+    if (!currentProject) {
+        showNotification('No project loaded', 'error');
+        return;
+    }
+
+    // Get test cards for this project
+    const projectCards = window.cards ? window.cards.filter(c => c.projectId === currentProject.id) : [];
+
+    if (projectCards.length === 0) {
+        showNotification('No test cards available. Add some test cards first!', 'error');
+        return;
+    }
+
+    // Shuffle cards for the test
+    const shuffledCards = shuffleArray([...projectCards]);
+
+    currentProjectTest = {
+        projectId: currentProject.id,
+        projectName: currentProject.name,
+        cards: shuffledCards,
+        currentIndex: 0,
+        score: 0,
+        startTime: Date.now(),
+        answers: []
+    };
+
+    // Navigate to project test page
+    document.querySelectorAll('.page').forEach(page => {
+        page.classList.remove('active');
+        page.classList.add('hidden');
+    });
+    const testPage = document.getElementById('projectTestPage');
+    if (testPage) {
+        testPage.classList.add('active');
+        testPage.classList.remove('hidden');
+    }
+
+    document.getElementById('projectTestPageTitle').textContent = `Test - ${currentProject.name}`;
+    showProjectTestQuestion();
 }
+
+// Shuffle array helper
+function shuffleArray(array) {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+}
+
+function showProjectTestQuestion() {
+    if (!currentProjectTest) return;
+
+    const card = currentProjectTest.cards[currentProjectTest.currentIndex];
+    const content = document.getElementById('projectTestPageContent');
+
+    content.innerHTML = `
+        <div class="test-header">
+            <div class="test-progress">Question ${currentProjectTest.currentIndex + 1} of ${currentProjectTest.cards.length}</div>
+            <div class="test-score">Score: ${currentProjectTest.score}/${currentProjectTest.currentIndex}</div>
+        </div>
+        <div class="test-card">
+            <div class="question-text">${escapeHtml(card.question)}</div>
+            <div class="answers-list" id="projectAnswersList">
+                ${card.options.map((opt, idx) => `
+                    <button class="answer-btn" onclick="window.selectProjectTestAnswer(${idx})">
+                        <div class="answer-letter">${String.fromCharCode(65 + idx)}</div>
+                        <div>${escapeHtml(opt)}</div>
+                    </button>
+                `).join('')}
+            </div>
+            <div class="feedback hidden" id="projectTestFeedback"></div>
+            <div class="test-actions" style="position: relative; display: flex; justify-content: center; align-items: center; min-height: 48px;">
+                <button id="nextProjectTestQuestionBtn" class="btn btn-primary hidden" onclick="window.nextProjectTestQuestion()">
+                    <i class="fas fa-arrow-right"></i> Next Question
+                </button>
+                <button class="btn btn-primary" onclick="window.exitProjectTest()" style="position: absolute; right: 0; background: var(--danger); border-color: var(--danger);">
+                    <i class="fas fa-sign-out-alt"></i> Exit Test
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+window.selectProjectTestAnswer = function(selectedIdx) {
+    const card = currentProjectTest.cards[currentProjectTest.currentIndex];
+    const buttons = document.querySelectorAll('#projectAnswersList .answer-btn');
+    const feedback = document.getElementById('projectTestFeedback');
+
+    // Disable buttons immediately
+    buttons.forEach(btn => btn.disabled = true);
+
+    // Instant validation (we have the answers locally)
+    const isCorrect = selectedIdx === card.correctAnswer;
+
+    // Store answer
+    currentProjectTest.answers.push({
+        cardId: card.id,
+        selectedAnswer: selectedIdx,
+        isCorrect
+    });
+
+    // Show correct/incorrect styling
+    buttons.forEach((btn, idx) => {
+        if (idx === card.correctAnswer) btn.classList.add('correct');
+        else if (idx === selectedIdx && !isCorrect) btn.classList.add('incorrect');
+    });
+
+    if (isCorrect) currentProjectTest.score++;
+
+    feedback.classList.remove('hidden');
+    feedback.classList.add(isCorrect ? 'correct' : 'incorrect');
+    feedback.innerHTML = `<strong>${isCorrect ? 'Correct!' : 'Incorrect'}</strong>${card.explanation ? `<p style="margin-top: 0.5rem;">${escapeHtml(card.explanation)}</p>` : ''}`;
+    document.getElementById('nextProjectTestQuestionBtn').classList.remove('hidden');
+};
+
+window.nextProjectTestQuestion = function() {
+    currentProjectTest.currentIndex++;
+    if (currentProjectTest.currentIndex >= currentProjectTest.cards.length) {
+        showProjectTestResults();
+    } else {
+        showProjectTestQuestion();
+    }
+};
+
+function showProjectTestResults() {
+    const score = currentProjectTest.score;
+    const total = currentProjectTest.cards.length;
+    const percentage = Math.round((score / total) * 100);
+    const timeSpent = Math.round((Date.now() - currentProjectTest.startTime) / 1000);
+
+    document.getElementById('projectTestPageContent').innerHTML = `
+        <div class="results-card">
+            <div class="results-icon"><i class="fas fa-trophy"></i></div>
+            <h3>Test Complete!</h3>
+            <div class="results-score">
+                <div class="score-big">${score}/${total}</div>
+                <div class="score-percentage">${percentage}%</div>
+            </div>
+            <div style="color: var(--text-secondary); margin-top: var(--spacing-md);">
+                Time: ${Math.floor(timeSpent / 60)}m ${timeSpent % 60}s
+            </div>
+            <div class="results-actions">
+                <button class="btn btn-primary" onclick="window.closeProjectTest()">Close Test</button>
+            </div>
+        </div>
+    `;
+}
+
+window.exitProjectTest = function() {
+    if (!currentProjectTest) return;
+    // Show results screen early
+    showProjectTestResults();
+};
+
+window.closeProjectTest = function() {
+    currentProjectTest = null;
+    // Navigate back to project detail page
+    document.querySelectorAll('.page').forEach(page => {
+        page.classList.remove('active');
+        page.classList.add('hidden');
+    });
+    const projectPage = document.getElementById('projectDetailPage');
+    if (projectPage) {
+        projectPage.classList.add('active');
+        projectPage.classList.remove('hidden');
+    }
+};
 
 export { quillEditor, currentProject };
 

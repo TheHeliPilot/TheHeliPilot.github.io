@@ -407,6 +407,89 @@ select:hover,
     border-color: var(--primary);
 }
 
+/* Difficulty Dropdown Styling */
+#testCardDifficulty,
+.test-card-difficulty {
+    font-weight: 600;
+    background: var(--surface);
+    border: 2px solid var(--secondary);
+    padding: 0.875rem 2.5rem 0.875rem 1.25rem;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+    color: var(--text-primary);
+    font-size: 1rem;
+}
+
+#testCardDifficulty:hover,
+.test-card-difficulty:hover {
+    border-color: var(--info);
+    box-shadow: 0 4px 20px rgba(95, 168, 255, 0.3);
+    transform: translateY(-2px);
+    background: var(--surface-light);
+}
+
+#testCardDifficulty:focus,
+.test-card-difficulty:focus {
+    border-color: var(--info);
+    box-shadow: 0 0 0 4px rgba(95, 168, 255, 0.25), 0 4px 20px rgba(95, 168, 255, 0.2);
+    transform: none;
+    outline: none;
+    background: var(--surface-light);
+}
+
+/* Improve dropdown arrow */
+#testCardDifficulty,
+.test-card-difficulty {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%235fa8ff' d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+    background-size: 16px;
+}
+
+/* Color-code difficulty options with rounded edges */
+#testCardDifficulty option,
+.test-card-difficulty option {
+    padding: 0.875rem 1.25rem;
+    background: var(--surface);
+    color: var(--text-primary);
+    font-weight: 600;
+    border-radius: 12px;
+    margin: 4px;
+}
+
+#testCardDifficulty option:hover,
+.test-card-difficulty option:hover {
+    background: linear-gradient(135deg, var(--info), var(--primary-light));
+    color: white;
+    cursor: pointer;
+}
+
+#testCardDifficulty option[value="easy"],
+.test-card-difficulty option[value="easy"] {
+    color: var(--success);
+}
+
+#testCardDifficulty option[value="medium"],
+.test-card-difficulty option[value="medium"] {
+    color: var(--warning);
+}
+
+#testCardDifficulty option[value="hard"],
+.test-card-difficulty option[value="hard"] {
+    color: var(--danger);
+}
+
+#testCardDifficulty option:checked,
+#testCardDifficulty option[selected],
+.test-card-difficulty option:checked,
+.test-card-difficulty option[selected] {
+    background: linear-gradient(135deg, var(--info), var(--primary-light));
+    color: white;
+    font-weight: 700;
+}
+
 .checkbox-label {
     display: flex;
     align-items: center;
@@ -605,6 +688,15 @@ select:hover,
 .actions-group {
     display: flex;
     gap: var(--spacing-md);
+    align-items: center;
+}
+
+/* Ensure explore search input is visible */
+#exploreSearch {
+    color: var(--text-primary) !important;
+    background: var(--surface-light) !important;
+    border: 2px solid var(--border) !important;
+    opacity: 1 !important;
 }
 
 /* === DASHBOARD === */
@@ -1731,6 +1823,95 @@ select:hover,
     font-size: 1rem;
 }
 
+/* === CARD STACK ANIMATIONS === */
+/* Card stack effect for study mode */
+.study-card-stack {
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.study-card-active {
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Slide out animations for active card */
+.study-card-active.slide-out-left {
+    animation: cardSlideOutLeft 0.4s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+.study-card-active.slide-out-right {
+    animation: cardSlideOutRight 0.4s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+/* Slide in animations for active card */
+.study-card-active.slide-in-from-back {
+    animation: cardSlideInFromBack 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Keyframes for card slide out left (next - goes away down) */
+@keyframes cardSlideOutLeft {
+    0% {
+        transform: translateX(0) translateY(0) scale(1) rotateZ(0deg);
+        opacity: 1;
+    }
+    100% {
+        transform: translateX(-150%) translateY(50px) scale(0.8) rotateZ(-15deg);
+        opacity: 0;
+    }
+}
+
+/* Keyframes for card slide out right (not used currently) */
+@keyframes cardSlideOutRight {
+    0% {
+        transform: translateX(0) translateY(0) scale(1) rotateZ(0deg);
+        opacity: 1;
+    }
+    100% {
+        transform: translateX(150%) translateY(50px) scale(0.8) rotateZ(15deg);
+        opacity: 0;
+    }
+}
+
+/* Keyframes for card sliding in from back of stack */
+@keyframes cardSlideInFromBack {
+    0% {
+        transform: translateY(12px) scale(0.94);
+        opacity: 0.3;
+    }
+    50% {
+        transform: translateY(6px) scale(0.97);
+        opacity: 0.6;
+    }
+    100% {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+    }
+}
+
+/* Keyframes for previous card sliding in from top-left */
+@keyframes cardSlideInFromTopLeft {
+    0% {
+        transform: translateX(-100%) translateY(-30px) scale(0.95) rotateZ(-8deg);
+        opacity: 0;
+    }
+    100% {
+        transform: translateX(0) translateY(0) scale(1) rotateZ(0deg);
+        opacity: 1;
+    }
+}
+
+/* Stack shift animations when card moves */
+@keyframes stackShiftUp {
+    0% {
+        transform: translateY(var(--from-y)) scale(var(--from-scale));
+        opacity: var(--from-opacity);
+    }
+    100% {
+        transform: translateY(var(--to-y)) scale(var(--to-scale));
+        opacity: var(--to-opacity);
+    }
+}
+
 /* Show mobile/desktop hints based on screen size */
 .mobile-hint {
     display: none;
@@ -2422,6 +2603,18 @@ select:hover,
     flex-direction: column;
     gap: var(--spacing-xs);
     flex: 1;
+}
+
+.test-card-edit-form {
+    display: none;
+}
+
+.test-card.editing .test-card-display {
+    display: none;
+}
+
+.test-card.editing .test-card-edit-form {
+    display: block;
 }
 
 .study-card .card-question {
