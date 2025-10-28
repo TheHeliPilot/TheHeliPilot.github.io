@@ -50,6 +50,30 @@ window.viewStudyMaterials = function(projectId, autoOpenMindMap = false) {
     }
 };
 
+// Refresh study materials view (called after returning from study mode)
+window.refreshStudyMaterialsView = async function() {
+    if (!currentViewingProject || !currentViewingProject.id) return;
+
+    // Reload projects to get updated mastery data
+    await window.loadProjects();
+    const updatedProject = window.projects.find(p => p.id === currentViewingProject.id);
+    if (updatedProject) {
+        currentViewingProject = updatedProject;
+    }
+
+    // Check which view is active and refresh it
+    const mindMapView = document.getElementById('studyMindMapView');
+    const listView = document.getElementById('studyListView');
+
+    if (mindMapView && !mindMapView.classList.contains('hidden')) {
+        // Refresh mind map
+        renderMindMap();
+    } else if (listView && !listView.classList.contains('hidden')) {
+        // Refresh list view
+        renderStudyCardsList();
+    }
+};
+
 // Close study materials viewer
 function closeStudyMaterialsViewer() {
     currentViewingProject = null;
@@ -107,6 +131,28 @@ function initStudyMaterials() {
 
     if (closeBtn) {
         closeBtn.addEventListener('click', closeStudyMaterialsViewer);
+    }
+
+    // Start study mode button
+    const startStudyModeBtn = document.getElementById('startStudyModeBtn');
+    if (startStudyModeBtn) {
+        startStudyModeBtn.addEventListener('click', () => {
+            if (!currentViewingProject) {
+                showNotification('No project selected', 'error');
+                return;
+            }
+            // Set the global currentProject so study mode can access it
+            if (typeof window.setCurrentProjectForStudy === 'function' && typeof window.startStudyMode === 'function') {
+                window.setCurrentProjectForStudy(currentViewingProject);
+                // Set return page to study materials viewer
+                if (window.studyModeState) {
+                    window.studyModeState.returnToPage = 'studyMaterialsPage';
+                }
+                window.startStudyMode();
+            } else {
+                showNotification('Study mode not available', 'error');
+            }
+        });
     }
 
     // Study page buttons
@@ -370,13 +416,14 @@ function renderMindMap() {
     d3.select('#mindMapSvg').selectAll('*').remove();
     if (mindMapSimulation) mindMapSimulation.stop();
 
-    // Build nodes and links
+    // Build nodes and links (include mastery data)
     const nodes = cards.map((card, i) => ({
         id: i,
         topic: card.topic,
         content: card.content,
         level: card.level,
-        category: card.category
+        category: card.category,
+        mastery: card.mastery || 'none'
     }));
 
     const links = [];
@@ -403,27 +450,43 @@ function renderMindMap() {
     const svg = d3.select('#mindMapSvg')
         .attr('viewBox', [0, 0, width, height]);
 
-    // Force simulation with physics
+    // Force simulation with physics (optimized for closer nodes)
     mindMapSimulation = d3.forceSimulation(nodes)
         .force('link', d3.forceLink(links)
             .id(d => d.id)
-            .distance(100)
-            .strength(0.5))
+            .distance(60)  // Reduced from 100 to bring nodes closer
+            .strength(0.8))  // Increased strength for tighter connections
         .force('charge', d3.forceManyBody()
-            .strength(-300)
-            .distanceMax(400))
+            .strength(-150)  // Reduced repulsion from -300
+            .distanceMax(250))  // Reduced from 400 for tighter layout
         .force('center', d3.forceCenter(width / 2, height / 2))
         .force('collision', d3.forceCollide()
-            .radius(d => radiusScale(d.level) + 10));
+            .radius(d => radiusScale(d.level) + 8))  // Reduced padding
+        .force('x', d3.forceX(width / 2).strength(0.05))  // Gentle pull to center
+        .force('y', d3.forceY(height / 2).strength(0.05));  // Gentle pull to center
 
-    // Draw links
+    // Draw links with curves to prevent overlap
     const link = svg.append('g')
-        .selectAll('line')
+        .selectAll('path')
         .data(links)
-        .join('line')
+        .join('path')
         .attr('stroke', '#3c4652')
         .attr('stroke-width', 2)
-        .attr('stroke-opacity', 0.6);
+        .attr('stroke-opacity', 0.6)
+        .attr('fill', 'none')
+        .style('transition', 'all 0.3s ease')
+        .on('mouseover', function() {
+            d3.select(this)
+                .attr('stroke', '#667eea')
+                .attr('stroke-width', 3)
+                .attr('stroke-opacity', 0.9);
+        })
+        .on('mouseout', function() {
+            d3.select(this)
+                .attr('stroke', '#3c4652')
+                .attr('stroke-width', 2)
+                .attr('stroke-opacity', 0.6);
+        });
 
     // Draw nodes
     const node = svg.append('g')
@@ -432,15 +495,37 @@ function renderMindMap() {
         .join('g')
         .call(drag(mindMapSimulation));
 
+    // Mastery color mapping
+    const masteryColors = {
+        'mastered': '#10b981',  // Green
+        'good': '#3b82f6',      // Blue
+        'learning': '#f59e0b',  // Orange
+        'weak': '#ef4444',      // Red
+        'none': '#6b7280'       // Gray
+    };
+
     // Node circles
     node.append('circle')
         .attr('r', d => radiusScale(d.level))
         .attr('fill', d => colorScale(d.level))
-        .attr('stroke', '#fff')
-        .attr('stroke-width', 2)
+        .attr('stroke', d => masteryColors[d.mastery])
+        .attr('stroke-width', d => d.mastery !== 'none' ? 4 : 2)  // Thicker border for mastered cards
         .style('cursor', 'pointer')
-        .on('mouseover', showTooltip)
-        .on('mouseout', hideTooltip)
+        .style('transition', 'all 0.3s ease')
+        .on('mouseover', function(event, d) {
+            // Scale up on hover
+            d3.select(this)
+                .attr('stroke-width', d.mastery !== 'none' ? 6 : 4)
+                .style('filter', 'brightness(1.2)');
+            showTooltip(event, d);
+        })
+        .on('mouseout', function(event, d) {
+            // Scale back on hover out
+            d3.select(this)
+                .attr('stroke-width', d.mastery !== 'none' ? 4 : 2)
+                .style('filter', 'brightness(1)');
+            hideTooltip();
+        })
         .on('click', (event, d) => {
             // Pulse animation on click
             d3.select(event.target)
@@ -465,13 +550,26 @@ function renderMindMap() {
         .style('pointer-events', 'none')
         .style('user-select', 'none');
 
-    // Update positions on tick
+    // Update positions on tick with curved links
     mindMapSimulation.on('tick', () => {
-        link
-            .attr('x1', d => d.source.x)
-            .attr('y1', d => d.source.y)
-            .attr('x2', d => d.target.x)
-            .attr('y2', d => d.target.y);
+        link.attr('d', d => {
+            const dx = d.target.x - d.source.x;
+            const dy = d.target.y - d.source.y;
+            const dr = Math.sqrt(dx * dx + dy * dy);
+
+            // Add slight curve to prevent overlap (curve amount based on distance)
+            const curve = dr * 0.15;
+
+            // Calculate control point for quadratic curve
+            const midX = (d.source.x + d.target.x) / 2;
+            const midY = (d.source.y + d.target.y) / 2;
+
+            // Perpendicular offset for curve
+            const offsetX = -dy / dr * curve;
+            const offsetY = dx / dr * curve;
+
+            return `M${d.source.x},${d.source.y} Q${midX + offsetX},${midY + offsetY} ${d.target.x},${d.target.y}`;
+        });
 
         node
             .attr('transform', d => `translate(${d.x},${d.y})`);
@@ -480,15 +578,36 @@ function renderMindMap() {
     // Tooltip functions
     function showTooltip(event, d) {
         const tooltip = document.getElementById('mindMapTooltip');
+        const masteryLabels = {
+            'mastered': '✓ Mastered',
+            'good': '👍 Good',
+            'learning': '📚 Learning',
+            'weak': '⚠️ Weak',
+            'none': '○ Not studied'
+        };
+        const masteryColors = {
+            'mastered': '#10b981',
+            'good': '#3b82f6',
+            'learning': '#f59e0b',
+            'weak': '#ef4444',
+            'none': '#6b7280'
+        };
+
         tooltip.querySelector('h4').textContent = d.topic;
-        tooltip.querySelector('p').textContent = d.content;
+        tooltip.querySelector('p').innerHTML = d.content +
+            `<br><br><span style="color: ${masteryColors[d.mastery]}; font-weight: 600; font-size: 0.9em;">${masteryLabels[d.mastery]}</span>`;
         tooltip.style.left = (event.pageX + 15) + 'px';
         tooltip.style.top = (event.pageY + 15) + 'px';
         tooltip.style.opacity = '1';
+        tooltip.style.zIndex = '10000';
     }
 
     function hideTooltip() {
-        document.getElementById('mindMapTooltip').style.opacity = '0';
+        const tooltip = document.getElementById('mindMapTooltip');
+        tooltip.style.opacity = '0';
+        setTimeout(() => {
+            tooltip.style.zIndex = '-1';
+        }, 200);
     }
 
     // Drag behavior

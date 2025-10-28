@@ -1714,7 +1714,8 @@ function renderMindMap() {
 // Study Mode State
 let studyModeState = {
     cards: [],
-    currentIndex: 0
+    currentIndex: 0,
+    returnToPage: null  // Track where to return after study mode
 };
 
 // Initialize Study Mode
@@ -1756,19 +1757,37 @@ function initStudyMode() {
 }
 
 // Close Study Mode
-function closeStudyMode() {
+async function closeStudyMode() {
+    const returnTo = studyModeState.returnToPage || 'projectDetailPage';
     studyModeState.cards = [];
     studyModeState.currentIndex = 0;
+    studyModeState.returnToPage = null;
 
-    // Navigate back to project detail page
+    // Reload project data to get updated mastery
+    if (currentProject && currentProject.id) {
+        await loadProjects();
+        const updatedProject = window.projects.find(p => p.id === currentProject.id);
+        if (updatedProject) {
+            currentProject = updatedProject;
+        }
+    }
+
+    // Navigate back to appropriate page
     document.querySelectorAll('.page').forEach(page => {
         page.classList.remove('active');
         page.classList.add('hidden');
     });
-    const projectPage = document.getElementById('projectDetailPage');
-    if (projectPage) {
-        projectPage.classList.add('active');
-        projectPage.classList.remove('hidden');
+    const targetPage = document.getElementById(returnTo);
+    if (targetPage) {
+        targetPage.classList.add('active');
+        targetPage.classList.remove('hidden');
+    }
+
+    // If returning to study materials page, refresh the mind map
+    if (returnTo === 'studyMaterialsPage') {
+        if (typeof window.refreshStudyMaterialsView === 'function') {
+            window.refreshStudyMaterialsView();
+        }
     }
 }
 
@@ -1801,6 +1820,13 @@ function startStudyMode() {
     // Display first card
     displayStudyCard();
 }
+
+// Expose functions for study materials viewer
+window.startStudyMode = startStudyMode;
+window.setCurrentProjectForStudy = function(project) {
+    currentProject = project;
+};
+window.studyModeState = studyModeState;
 
 // Sort cards in hierarchical order (depth-first - branch by branch)
 function sortCardsHierarchically(cards) {
