@@ -35,11 +35,13 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Text is required' });
     }
 
-    if (text.length > 50000) {
-      return res.status(400).json({ error: 'Text is too long (max 50,000 characters)' });
+    const wordCount = text.split(/\s+/).length;
+
+    if (text.length > 200000) {
+      return res.status(400).json({ error: 'Text is too long (max 200,000 characters). Try breaking it into smaller sections.' });
     }
 
-    console.log(`Cleaning notes for user ${userId || 'anonymous'}...`);
+    console.log(`Cleaning notes for user ${userId || 'anonymous'} - ${wordCount} words...`);
 
     // Use OpenAI to clean and format the notes
     const completion = await openai.chat.completions.create({

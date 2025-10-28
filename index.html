@@ -284,7 +284,6 @@
                 <div id="notesTab" class="project-tab-content active">
                     <div class="notes-toolbar">
                         <div style="display: flex; gap: var(--spacing-md); align-items: center;">
-                            <i class="fas fa-language" style="color: var(--text-secondary);"></i>
                             <select id="generationLanguage" class="select-input" style="width: 150px;">
                                 <option value="en">English</option>
                                 <option value="sk">Slovak</option>
@@ -298,13 +297,6 @@
                             </select>
                         </div>
                         <div style="display: flex; gap: var(--spacing-md); margin-left: auto; align-items: center;">
-                            <label class="toggle-switch" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                                <input type="checkbox" id="markdownPreviewToggle" style="display: none;">
-                                <div style="position: relative; width: 40px; height: 20px; background: var(--surface-light); border-radius: 10px; transition: background 0.3s;">
-                                    <div id="markdownToggleSlider" style="position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background: white; border-radius: 50%; transition: transform 0.3s;"></div>
-                                </div>
-                                <span style="font-size: 0.875rem; color: var(--text-secondary);">Preview</span>
-                            </label>
                             <input type="file" id="importNotesFile" accept=".pdf,.docx,.txt,.md" style="display: none;">
                             <button id="importNotesBtn" class="btn btn-secondary">
                                 <i class="fas fa-file-import"></i>
@@ -312,7 +304,7 @@
                             </button>
                             <button id="cleanNotesBtn" class="btn btn-secondary">
                                 <i class="fas fa-wand-magic-sparkles"></i>
-                                AI Clean Notes
+                                AI Clean
                             </button>
                             <button id="saveNotesBtn" class="btn btn-secondary">
                                 <i class="fas fa-save"></i>
@@ -325,7 +317,6 @@
                         </div>
                     </div>
                     <div id="notesEditor"></div>
-                    <div id="markdownPreview" style="display: none; padding: var(--spacing-xl); background: var(--surface); border-radius: var(--radius-lg); min-height: 400px;"></div>
                 </div>
 
                 <!-- Test Cards Tab -->
@@ -362,10 +353,29 @@
 
                 <!-- Mind Map Tab -->
                 <div id="mindMapTab" class="project-tab-content">
+                    <!-- Analytics Stats -->
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--spacing-md); margin-bottom: var(--spacing-md);">
+                        <div style="padding: var(--spacing-md); background: var(--surface); border-radius: var(--radius-md); border-left: 4px solid #43e97b;">
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">MASTERED</div>
+                            <div id="masteredCount" style="font-size: 1.5rem; font-weight: 600; color: #43e97b;">0</div>
+                        </div>
+                        <div style="padding: var(--spacing-md); background: var(--surface); border-radius: var(--radius-md); border-left: 4px solid #48dbfb;">
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">GOOD</div>
+                            <div id="goodCount" style="font-size: 1.5rem; font-weight: 600; color: #48dbfb;">0</div>
+                        </div>
+                        <div style="padding: var(--spacing-md); background: var(--surface); border-radius: var(--radius-md); border-left: 4px solid #feca57;">
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">LEARNING</div>
+                            <div id="learningCount" style="font-size: 1.5rem; font-weight: 600; color: #feca57;">0</div>
+                        </div>
+                        <div style="padding: var(--spacing-md); background: var(--surface); border-radius: var(--radius-md); border-left: 4px solid #ff6b6b;">
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">NEEDS REVIEW</div>
+                            <div id="weakCount" style="font-size: 1.5rem; font-weight: 600; color: #ff6b6b;">0</div>
+                        </div>
+                    </div>
                     <div style="margin-bottom: var(--spacing-md); padding: var(--spacing-md); background: var(--surface-light); border-radius: var(--radius-md); display: flex; gap: var(--spacing-md); align-items: center;">
                         <i class="fas fa-info-circle" style="color: var(--primary);"></i>
                         <span style="color: var(--text-secondary); font-size: 0.875rem;">
-                            <strong>Tree View:</strong> Scroll to zoom • Drag background to pan • Double-click to reset • Hover for card details • Tree flows left to right
+                            <strong>Interactive Map:</strong> Colored borders show mastery level • Scroll to zoom • Drag nodes or background • Hover for details
                         </span>
                     </div>
                     <div id="projectMindMapContainer" style="width: 100%; height: calc(100vh - 380px); background: var(--background); border: 1px solid var(--border); border-radius: var(--radius-lg); position: relative;">
@@ -417,6 +427,27 @@
 
                                     <!-- Content -->
                                     <div id="studyCardContent" style="color: var(--text); font-size: 1.125rem; line-height: 1.8;"></div>
+                                </div>
+                            </div>
+
+                            <!-- Mastery Level Buttons -->
+                            <div style="margin-bottom: var(--spacing-lg);">
+                                <div style="text-align: center; margin-bottom: var(--spacing-sm); color: var(--text-secondary); font-size: 0.875rem;">
+                                    How well do you know this?
+                                </div>
+                                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--spacing-sm);">
+                                    <button class="btn mastery-btn" data-mastery="weak" style="background: #ff6b6b; border: none;">
+                                        <i class="fas fa-times-circle"></i> Weak
+                                    </button>
+                                    <button class="btn mastery-btn" data-mastery="learning" style="background: #feca57; border: none;">
+                                        <i class="fas fa-book-reader"></i> Learning
+                                    </button>
+                                    <button class="btn mastery-btn" data-mastery="good" style="background: #48dbfb; border: none;">
+                                        <i class="fas fa-thumbs-up"></i> Good
+                                    </button>
+                                    <button class="btn mastery-btn" data-mastery="mastered" style="background: #43e97b; border: none;">
+                                        <i class="fas fa-check-circle"></i> Mastered
+                                    </button>
                                 </div>
                             </div>
 

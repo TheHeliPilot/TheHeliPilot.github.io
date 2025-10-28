@@ -71,11 +71,6 @@ function setupProjectDetailEventListeners() {
         cleanNotesBtn.addEventListener('click', cleanNotesWithAI);
     }
 
-    // Markdown preview toggle
-    const markdownToggle = document.getElementById('markdownPreviewToggle');
-    if (markdownToggle) {
-        markdownToggle.addEventListener('change', toggleMarkdownPreview);
-    }
 
     // Regenerate project button
     const regenerateBtn = document.getElementById('regenerateProjectBtn');
@@ -540,70 +535,32 @@ async function regenerateProject() {
         };
         console.log('Sending study cards request:', studyCardsPayload);
 
-        const studyCardsData = await retryAPICall(async () => {
-            const studyCardsResponse = await fetch('https://quizapp2-eight.vercel.app/api/generate-study-cards', {
+        const generatedData = await retryAPICall(async () => {
+            const response = await fetch('https://quizapp2-eight.vercel.app/api/generate-study-cards', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(studyCardsPayload)
             });
 
-            if (!studyCardsResponse.ok) {
-                let errorMessage = 'Failed to generate study cards';
+            if (!response.ok) {
+                let errorMessage = 'Failed to generate cards';
                 try {
-                    const error = await studyCardsResponse.json();
-                    console.error('Study cards API error:', error);
-                    errorMessage = error.error || error.message || `Server error (${studyCardsResponse.status})`;
+                    const error = await response.json();
+                    console.error('Generation API error:', error);
+                    errorMessage = error.error || error.message || `Server error (${response.status})`;
                 } catch (e) {
                     console.error('Could not parse error response:', e);
-                    errorMessage = `Server error (${studyCardsResponse.status})`;
+                    errorMessage = `Server error (${response.status})`;
                 }
                 throw new Error(errorMessage);
             }
 
-            const data = await studyCardsResponse.json();
-            console.log('Study cards generated:', data);
+            const data = await response.json();
+            console.log('Cards generated:', data);
             return data;
         });
 
-
-        // Step 2: Generate quiz cards (with retry)
-        regenerateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating test cards...';
-
-        const quizCardsData = await retryAPICall(async () => {
-            const quizCardsResponse = await fetch('https://quizapp2-eight.vercel.app/api/generate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    userId: user.uid,
-                    isPro: isPro || isDev || isAdmin,
-                    text: notesText,
-                    count: quizCount,
-                    model: model,
-                    difficulty: 'mixed',
-                    language: language,
-                    languageInstruction: `Generate all content in ${languageName}. Questions, answers, explanations, and all text should be in ${languageName}.`
-                })
-            });
-
-            if (!quizCardsResponse.ok) {
-                let errorMessage = 'Failed to generate test cards';
-                try {
-                    const error = await quizCardsResponse.json();
-                    console.error('Quiz cards API error:', error);
-                    errorMessage = error.error || error.message || `Server error (${quizCardsResponse.status})`;
-                } catch (e) {
-                    console.error('Could not parse error response:', e);
-                    errorMessage = `Server error (${quizCardsResponse.status})`;
-                }
-                throw new Error(errorMessage);
-            }
-
-            const data = await quizCardsResponse.json();
-            console.log('Quiz cards generated:', data);
-            return data;
-        });
-
-        // Step 3: Delete old cards before saving new ones
+        // Step 2: Delete old cards before saving new ones
         regenerateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting old cards...';
 
         // Delete all unlocked test cards for this project
@@ -621,11 +578,11 @@ async function regenerateProject() {
             }
         }
 
-        // Step 4: Save new quiz cards
+        // Step 3: Save new test cards (linked to study cards)
         regenerateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving new test cards...';
 
         const cardsRef = ref(window.db, `users/${user.uid}/cards`);
-        for (const card of quizCardsData.cards) {
+        for (const card of generatedData.testCards) {
             const cardData = {
                 projectId: currentProject.id,
                 question: card.question,
@@ -633,6 +590,7 @@ async function regenerateProject() {
                 correctAnswer: card.correctAnswer,
                 explanation: card.explanation || '',
                 difficulty: card.difficulty || 'medium',
+                relatedStudyCard: card.relatedStudyCard,
                 mastered: false,
                 locked: false,
                 createdAt: Date.now()
@@ -643,22 +601,22 @@ async function regenerateProject() {
         // Save study cards to project
         const projectRef = ref(window.db, `users/${user.uid}/projects/${currentProject.id}`);
         await update(projectRef, {
-            studyCards: studyCardsData.cards,
-            studyCardsCount: studyCardsData.count,
+            studyCards: generatedData.studyCards,
+            studyCardsCount: generatedData.studyCardCount,
             language: language,
             updatedAt: new Date().toISOString()
         });
 
         // Update local project data
-        currentProject.studyCards = studyCardsData.cards;
-        currentProject.studyCardsCount = studyCardsData.count;
+        currentProject.studyCards = generatedData.studyCards;
+        currentProject.studyCardsCount = generatedData.studyCardCount;
         currentProject.language = language;
 
         if (window.projects) {
             const projectIndex = window.projects.findIndex(p => p.id === currentProject.id);
             if (projectIndex !== -1) {
-                window.projects[projectIndex].studyCards = studyCardsData.cards;
-                window.projects[projectIndex].studyCardsCount = studyCardsData.count;
+                window.projects[projectIndex].studyCards = generatedData.studyCards;
+                window.projects[projectIndex].studyCardsCount = generatedData.studyCardCount;
                 window.projects[projectIndex].language = language;
             }
         }
@@ -669,7 +627,7 @@ async function regenerateProject() {
         }
 
         // Success!
-        showNotification(`Generated ${studyCardsData.count} study cards and ${quizCardsData.cards.length} test cards!`, 'success');
+        showNotification(`Generated ${generatedData.studyCardCount} study cards and ${generatedData.testCardCount} test cards!`, 'success');
 
         // Reload the cards display
         loadTestCards(currentProject.id);
@@ -1143,6 +1101,9 @@ function renderMindMap() {
         return;
     }
 
+    // Update analytics stats
+    updateMindmapAnalytics(project.studyCards);
+
     // Clear previous visualization
     svgElement.innerHTML = '';
 
@@ -1162,17 +1123,22 @@ function renderMindMap() {
         return Math.max(140, textLength * 8.5 + 50);
     };
 
+    // Get test cards for this project
+    const testCards = window.cards ? window.cards.filter(c => c.projectId === project.id) : [];
+    console.log('Test cards:', testCards);
+
     // Build nodes and links for force simulation
-    function buildForceData(cards) {
-        // Calculate hierarchical initial positions to prevent overlap
+    function buildForceData(studyCards, testCards) {
+        // Study cards positioning
         const levelGroups = {};
-        cards.forEach((card, index) => {
+        studyCards.forEach((card, index) => {
             const level = card.level || 0;
             if (!levelGroups[level]) levelGroups[level] = [];
             levelGroups[level].push(index);
         });
 
-        const nodes = cards.map((card, index) => {
+        // Create nodes for study cards
+        const nodes = studyCards.map((card, index) => {
             const name = card.topic || card.term || card.name || card.title || `Card ${index + 1}`;
             const nodeWidth = calculateNodeWidth(name);
             const level = card.level || 0;
@@ -1184,12 +1150,26 @@ function renderMindMap() {
             const angle = nodeIndexInLevel * angleStep - Math.PI / 2; // Start from top
             const radius = 100 + level * 150; // Distance from center increases with level
 
+            // Get mastery-based border color
+            const masteryColors = {
+                'mastered': '#43e97b',  // Green
+                'good': '#48dbfb',      // Cyan
+                'learning': '#feca57', // Yellow
+                'weak': '#ff6b6b'      // Red
+            };
+            const masteryColor = card.mastery ? masteryColors[card.mastery] : null;
+
             return {
-                id: index,
+                id: `study-${index}`,
+                originalIndex: index,
+                type: 'study',
                 name: name,
                 definition: card.content || card.definition || card.description || '',
                 level: level,
                 color: card.color || '#667eea',
+                mastery: card.mastery,
+                masteryColor: masteryColor,
+                lastStudied: card.lastStudied,
                 parentIndex: card.parentIndex,
                 width: nodeWidth,
                 radius: nodeWidth / 2 + 20, // Half width + padding
@@ -1198,12 +1178,59 @@ function renderMindMap() {
             };
         });
 
+        // Add test card nodes (positioned around their related study cards)
+        testCards.forEach((testCard, testIndex) => {
+            const relatedStudyIndex = testCard.relatedStudyCard;
+            if (relatedStudyIndex !== undefined && relatedStudyIndex >= 0 && relatedStudyIndex < studyCards.length) {
+                const relatedNode = nodes[relatedStudyIndex];
+
+                // Position test node near its study card (offset by angle)
+                const offsetAngle = (testIndex * Math.PI / 6); // Distribute around study node
+                const offsetDistance = 120;
+
+                const nodeWidth = calculateNodeWidth(`Test ${testIndex + 1}`);
+
+                nodes.push({
+                    id: `test-${testIndex}`,
+                    originalIndex: testIndex,
+                    type: 'test',
+                    name: `Test: ${testCard.question.substring(0, 40)}...`,
+                    definition: testCard.question,
+                    level: relatedNode.level,
+                    color: '#9333ea', // Purple for test cards
+                    mastery: testCard.mastered ? 'mastered' : null,
+                    masteryColor: testCard.mastered ? '#43e97b' : null,
+                    relatedStudyCard: relatedStudyIndex,
+                    difficulty: testCard.difficulty,
+                    width: nodeWidth,
+                    radius: nodeWidth / 2 + 15,
+                    x: relatedNode.x + Math.cos(offsetAngle) * offsetDistance,
+                    y: relatedNode.y + Math.sin(offsetAngle) * offsetDistance
+                });
+            }
+        });
+
+        // Build links
         const links = [];
-        cards.forEach((card, index) => {
+
+        // Links between study cards (hierarchy)
+        studyCards.forEach((card, index) => {
             if (card.parentIndex !== null && card.parentIndex !== undefined && card.parentIndex >= 0) {
                 links.push({
-                    source: card.parentIndex,
-                    target: index
+                    source: `study-${card.parentIndex}`,
+                    target: `study-${index}`,
+                    type: 'hierarchy'
+                });
+            }
+        });
+
+        // Links from test cards to their related study cards
+        testCards.forEach((testCard, testIndex) => {
+            if (testCard.relatedStudyCard !== undefined && testCard.relatedStudyCard >= 0) {
+                links.push({
+                    source: `study-${testCard.relatedStudyCard}`,
+                    target: `test-${testIndex}`,
+                    type: 'test-link'
                 });
             }
         });
@@ -1211,7 +1238,7 @@ function renderMindMap() {
         return { nodes, links };
     }
 
-    const { nodes, links } = buildForceData(studyCards);
+    const { nodes, links } = buildForceData(studyCards, testCards);
     console.log('Force simulation data:', { nodes, links });
 
     // Setup SVG
@@ -1287,17 +1314,21 @@ function renderMindMap() {
         .alphaDecay(0.02)
         .velocityDecay(0.3);
 
-    // Draw links (springy connections with gradient)
+    // Draw links (springy connections with different styles)
     const linkElements = container.selectAll('.mind-map-link')
         .data(links)
         .enter().append('line')
         .attr('class', 'mind-map-link')
         .attr('stroke', d => {
-            // Use target node's color for the link
+            if (d.type === 'test-link') {
+                return '#9333ea'; // Purple for test links
+            }
+            // Use target node's color for hierarchy links
             return d.target.color || '#667eea';
         })
-        .attr('stroke-width', 2.5)
-        .attr('stroke-opacity', 0.4)
+        .attr('stroke-width', d => d.type === 'test-link' ? 2 : 2.5)
+        .attr('stroke-opacity', d => d.type === 'test-link' ? 0.3 : 0.4)
+        .attr('stroke-dasharray', d => d.type === 'test-link' ? '5,5' : 'none')
         .style('stroke-linecap', 'round')
         .style('transition', 'all 0.3s ease');
 
@@ -1326,10 +1357,12 @@ function renderMindMap() {
         .attr('rx', 12)
         .attr('ry', 12)
         .attr('fill', '#1e2329')
-        .attr('stroke', d => d.color || '#667eea')
-        .attr('stroke-width', 1.5)
-        .attr('stroke-opacity', 0.3)
-        .style('filter', 'drop-shadow(0 6px 16px rgba(0,0,0,0.5))')
+        .attr('stroke', d => d.masteryColor || d.color || '#667eea')
+        .attr('stroke-width', d => d.masteryColor ? 3 : 1.5)
+        .attr('stroke-opacity', d => d.masteryColor ? 0.9 : 0.3)
+        .style('filter', d => d.masteryColor ?
+            `drop-shadow(0 0 8px ${d.masteryColor}) drop-shadow(0 6px 16px rgba(0,0,0,0.5))` :
+            'drop-shadow(0 6px 16px rgba(0,0,0,0.5))')
         .style('cursor', 'grab')
         .style('transition', 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)');
 
@@ -1370,13 +1403,32 @@ function renderMindMap() {
 
     // Level label inside rectangle
     nodeGroups.append('text')
-        .text(d => d.level >= 0 ? `Level ${d.level}` : '')
+        .text(d => {
+            if (d.type === 'test') {
+                return `Test (${d.difficulty || 'medium'})`;
+            }
+            return d.level >= 0 ? `Level ${d.level}` : '';
+        })
         .attr('x', d => -getRectWidth(d) / 2 + accentWidth + 12)
         .attr('text-anchor', 'start')
         .attr('dy', 12)
         .attr('fill', '#9da7b3')
         .attr('font-size', '10px')
         .attr('font-weight', '500')
+        .attr('pointer-events', 'none');
+
+    // Add progress glow background for nodes with mastery
+    nodeGroups.insert('rect', 'rect')
+        .attr('class', 'progress-glow')
+        .attr('x', d => -getRectWidth(d) / 2 - 8)
+        .attr('y', -rectHeight / 2 - 8)
+        .attr('width', d => getRectWidth(d) + 16)
+        .attr('height', rectHeight + 16)
+        .attr('rx', 16)
+        .attr('ry', 16)
+        .attr('fill', d => d.masteryColor || 'none')
+        .attr('opacity', d => d.masteryColor ? 0.15 : 0)
+        .style('filter', d => d.masteryColor ? `blur(10px)` : 'none')
         .attr('pointer-events', 'none');
 
     // Hover and click effects with smooth animations
@@ -1540,6 +1592,15 @@ function initStudyMode() {
     nextBtn?.addEventListener('click', () => navigateStudyMode(1));
     restartBtn?.addEventListener('click', startStudyMode);
 
+    // Mastery buttons
+    document.addEventListener('click', (e) => {
+        const masteryBtn = e.target.closest('.mastery-btn');
+        if (masteryBtn) {
+            const mastery = masteryBtn.dataset.mastery;
+            setCardMastery(mastery);
+        }
+    });
+
     // Keyboard navigation
     document.addEventListener('keydown', (e) => {
         const studyModeActive = document.getElementById('studyModeCard')?.classList.contains('hidden') === false;
@@ -1547,6 +1608,11 @@ function initStudyMode() {
 
         if (e.key === 'ArrowLeft') navigateStudyMode(-1);
         else if (e.key === 'ArrowRight') navigateStudyMode(1);
+        // Number keys for mastery
+        else if (e.key === '1') setCardMastery('weak');
+        else if (e.key === '2') setCardMastery('learning');
+        else if (e.key === '3') setCardMastery('good');
+        else if (e.key === '4') setCardMastery('mastered');
     });
 }
 
@@ -1649,6 +1715,18 @@ function displayStudyCard() {
     // Update navigation buttons
     document.getElementById('studyModePrev').disabled = studyModeState.currentIndex === 0;
     document.getElementById('studyModeNext').disabled = studyModeState.currentIndex === totalCards - 1;
+
+    // Highlight current mastery level
+    const currentMastery = card.mastery || 'none';
+    document.querySelectorAll('.mastery-btn').forEach(btn => {
+        if (btn.dataset.mastery === currentMastery) {
+            btn.style.transform = 'scale(1.05)';
+            btn.style.boxShadow = '0 0 0 3px rgba(255,255,255,0.3)';
+        } else {
+            btn.style.transform = 'scale(1)';
+            btn.style.boxShadow = 'none';
+        }
+    });
 }
 
 // Navigate study mode
@@ -1666,7 +1744,74 @@ function showStudyComplete() {
     document.getElementById('studyModeComplete').classList.remove('hidden');
 }
 
-// Handle file import
+// Set card mastery level
+async function setCardMastery(mastery) {
+    if (!currentProject || !studyModeState.cards[studyModeState.currentIndex]) {
+        return;
+    }
+
+    const card = studyModeState.cards[studyModeState.currentIndex];
+    const originalIndex = card.originalIndex;
+
+    // Update in current project
+    if (currentProject.studyCards && currentProject.studyCards[originalIndex]) {
+        currentProject.studyCards[originalIndex].mastery = mastery;
+        currentProject.studyCards[originalIndex].lastStudied = new Date().toISOString();
+    }
+
+    // Save to Firebase
+    try {
+        const user = auth.currentUser;
+        if (user && currentProject.id) {
+            const cardRef = ref(database, `users/${user.uid}/projects/${currentProject.id}/studyCards/${originalIndex}`);
+            await update(cardRef, {
+                mastery: mastery,
+                lastStudied: new Date().toISOString()
+            });
+
+            showNotification(`Marked as ${mastery}`, 'success');
+
+            // Update all mastery buttons to show current selection
+            document.querySelectorAll('.mastery-btn').forEach(btn => {
+                if (btn.dataset.mastery === mastery) {
+                    btn.style.transform = 'scale(1.05)';
+                    btn.style.boxShadow = '0 0 0 3px rgba(255,255,255,0.3)';
+                } else {
+                    btn.style.transform = 'scale(1)';
+                    btn.style.boxShadow = 'none';
+                }
+            });
+
+            // Update mindmap analytics if on mindmap tab
+            updateMindmapAnalytics(currentProject.studyCards);
+
+            // Auto-advance to next card after short delay
+            setTimeout(() => {
+                navigateStudyMode(1);
+            }, 500);
+        }
+    } catch (error) {
+        console.error('Failed to save mastery:', error);
+        showNotification('Failed to save progress', 'error');
+    }
+}
+
+// Update mindmap analytics stats
+function updateMindmapAnalytics(studyCards) {
+    if (!studyCards) return;
+
+    const mastered = studyCards.filter(c => c.mastery === 'mastered').length;
+    const good = studyCards.filter(c => c.mastery === 'good').length;
+    const learning = studyCards.filter(c => c.mastery === 'learning').length;
+    const weak = studyCards.filter(c => c.mastery === 'weak').length;
+
+    document.getElementById('masteredCount').textContent = mastered;
+    document.getElementById('goodCount').textContent = good;
+    document.getElementById('learningCount').textContent = learning;
+    document.getElementById('weakCount').textContent = weak;
+}
+
+// Handle file import (no auto-clean)
 async function handleFileImport(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -1679,27 +1824,41 @@ async function handleFileImport(event) {
         return;
     }
 
+    // Check file size (warn for large PDFs)
+    const fileSizeMB = file.size / (1024 * 1024);
+    if (fileSizeMB > 50) {
+        showNotification('Warning: Large file may take a while to process...', 'info');
+    }
+
     try {
         showNotification('Importing file...', 'info');
 
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await fetch('https://quizapp2-eight.vercel.app/api/parse-file', {
+        // Parse the file
+        const parseResponse = await fetch('https://quizapp2-eight.vercel.app/api/parse-file', {
             method: 'POST',
             body: formData
         });
 
-        if (!response.ok) {
-            throw new Error('Failed to parse file');
+        if (!parseResponse.ok) {
+            const errorData = await parseResponse.json().catch(() => ({}));
+            throw new Error(errorData.error || 'Failed to parse file');
         }
 
-        const data = await response.json();
+        const parseData = await parseResponse.json();
 
-        // Insert extracted text into editor
-        if (quillEditor && data.text) {
-            quillEditor.setText(data.text);
-            showNotification('File imported successfully!', 'success');
+        if (!parseData.text) {
+            throw new Error('No text extracted from file');
+        }
+
+        // Insert raw text into editor
+        if (quillEditor) {
+            quillEditor.setText(parseData.text);
+
+            const wordCount = parseData.text.split(/\s+/).length;
+            showNotification(`File imported! ${wordCount} words extracted. Use "AI Clean" to format.`, 'success');
         }
     } catch (error) {
         console.error('Import error:', error);
@@ -1710,7 +1869,7 @@ async function handleFileImport(event) {
     event.target.value = '';
 }
 
-// Clean notes with AI
+// Clean notes with AI (manual action)
 async function cleanNotesWithAI() {
     if (!quillEditor) {
         showNotification('Editor not available', 'error');
@@ -1721,6 +1880,13 @@ async function cleanNotesWithAI() {
     if (!rawText || rawText.trim().length === 0) {
         showNotification('No notes to clean', 'error');
         return;
+    }
+
+    // Check text length
+    const wordCount = rawText.split(/\s+/).length;
+    if (wordCount > 10000) {
+        const confirmed = confirm(`Your notes are very long (${wordCount} words). AI cleaning may take a while and could be expensive. Continue?`);
+        if (!confirmed) return;
     }
 
     try {
@@ -1738,7 +1904,8 @@ async function cleanNotesWithAI() {
         });
 
         if (!response.ok) {
-            throw new Error('Failed to clean notes');
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || 'Failed to clean notes');
         }
 
         const data = await response.json();
@@ -1754,123 +1921,6 @@ async function cleanNotesWithAI() {
     }
 }
 
-// Toggle markdown preview
-function toggleMarkdownPreview() {
-    const toggle = document.getElementById('markdownPreviewToggle');
-    const editor = document.getElementById('notesEditor');
-    const preview = document.getElementById('markdownPreview');
-    const slider = document.getElementById('markdownToggleSlider');
-    const toggleBg = slider.parentElement;
-
-    if (!toggle || !editor || !preview || !quillEditor) return;
-
-    if (toggle.checked) {
-        // Show preview
-        const rawText = quillEditor.getText();
-        preview.innerHTML = renderMarkdown(rawText);
-        editor.style.display = 'none';
-        preview.style.display = 'block';
-        slider.style.transform = 'translateX(20px)';
-        toggleBg.style.background = 'var(--primary)';
-    } else {
-        // Show editor
-        editor.style.display = 'block';
-        preview.style.display = 'none';
-        slider.style.transform = 'translateX(0)';
-        toggleBg.style.background = 'var(--surface-light)';
-    }
-}
-
-// Simple markdown renderer
-function renderMarkdown(text) {
-    let html = text;
-
-    // Escape HTML
-    html = html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-    // Headers (# ## ### etc)
-    html = html.replace(/^######\s+(.+)$/gm, '<h6 style="margin-top: 1.5rem; margin-bottom: 0.5rem; color: var(--primary);">$1</h6>');
-    html = html.replace(/^#####\s+(.+)$/gm, '<h5 style="margin-top: 1.5rem; margin-bottom: 0.5rem; color: var(--primary);">$1</h5>');
-    html = html.replace(/^####\s+(.+)$/gm, '<h4 style="margin-top: 1.5rem; margin-bottom: 0.5rem; color: var(--primary);">$1</h4>');
-    html = html.replace(/^###\s+(.+)$/gm, '<h3 style="margin-top: 2rem; margin-bottom: 0.75rem; color: var(--primary);">$1</h3>');
-    html = html.replace(/^##\s+(.+)$/gm, '<h2 style="margin-top: 2rem; margin-bottom: 0.75rem; color: var(--primary);">$1</h2>');
-    html = html.replace(/^#\s+(.+)$/gm, '<h1 style="margin-top: 2rem; margin-bottom: 1rem; color: var(--primary);">$1</h1>');
-
-    // Bold **text**
-    html = html.replace(/\*\*(.+?)\*\*/g, '<strong style="font-weight: 600;">$1</strong>');
-
-    // Italic *text*
-    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-
-    // Code `code`
-    html = html.replace(/`(.+?)`/g, '<code style="background: var(--surface-light); padding: 0.2rem 0.4rem; border-radius: 4px; font-family: monospace; font-size: 0.9em;">$1</code>');
-
-    // Links [text](url)
-    html = html.replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" style="color: var(--primary); text-decoration: underline;">$1</a>');
-
-    // Unordered lists (- item)
-    const listRegex = /^- (.+)$/gm;
-    let inList = false;
-    html = html.split('\n').map(line => {
-        if (line.match(/^- /)) {
-            const item = line.replace(/^- /, '');
-            if (!inList) {
-                inList = true;
-                return `<ul style="margin: 0.5rem 0; padding-left: 1.5rem; list-style: disc;"><li style="margin: 0.25rem 0;">${item}</li>`;
-            }
-            return `<li style="margin: 0.25rem 0;">${item}</li>`;
-        } else {
-            if (inList) {
-                inList = false;
-                return `</ul>${line}`;
-            }
-            return line;
-        }
-    }).join('\n');
-
-    // Close any open lists
-    if (inList) {
-        html += '</ul>';
-    }
-
-    // Ordered lists (1. item)
-    const orderedRegex = /^\d+\. /;
-    inList = false;
-    html = html.split('\n').map(line => {
-        if (line.match(orderedRegex)) {
-            const item = line.replace(/^\d+\. /, '');
-            if (!inList) {
-                inList = true;
-                return `<ol style="margin: 0.5rem 0; padding-left: 1.5rem;"><li style="margin: 0.25rem 0;">${item}</li>`;
-            }
-            return `<li style="margin: 0.25rem 0;">${item}</li>`;
-        } else {
-            if (inList) {
-                inList = false;
-                return `</ol>${line}`;
-            }
-            return line;
-        }
-    }).join('\n');
-
-    // Close any open lists
-    if (inList) {
-        html += '</ol>';
-    }
-
-    // Paragraphs (double newline)
-    html = html.split('\n\n').map(para => {
-        if (para.trim() && !para.startsWith('<')) {
-            return `<p style="margin: 1rem 0; line-height: 1.6;">${para}</p>`;
-        }
-        return para;
-    }).join('\n\n');
-
-    // Single line breaks
-    html = html.replace(/\n/g, '<br>');
-
-    return html;
-}
 
 // Helper functions
 function showPage(pageId) {

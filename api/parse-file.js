@@ -26,6 +26,8 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  console.log('Parse file request received');
+
   try {
     // Parse multipart form data manually (since we're in a serverless function)
     const contentType = req.headers['content-type'] || '';
@@ -97,7 +99,19 @@ export default async function handler(req, res) {
     // Clean up whitespace
     text = text.replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
 
-    res.status(200).json({ text });
+    // Warn if text is very large
+    const wordCount = text.split(/\s+/).length;
+    console.log(`Extracted ${wordCount} words from ${filename}`);
+
+    if (wordCount > 50000) {
+      console.warn('Very large document extracted (50k+ words)');
+    }
+
+    res.status(200).json({
+      text,
+      wordCount,
+      filename
+    });
 
   } catch (error) {
     console.error('File parsing error:', error);
