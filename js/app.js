@@ -200,10 +200,14 @@ function initNavigation() {
             link.classList.add('active');
 
             // Show page
-            pages.forEach(p => p.classList.remove('active'));
+            pages.forEach(p => {
+                p.classList.remove('active');
+                p.classList.add('hidden');
+            });
             const targetPage = document.getElementById(`${pageName}Page`);
             if (targetPage) {
                 targetPage.classList.add('active');
+                targetPage.classList.remove('hidden');
                 pageTitle.textContent = link.querySelector('span').textContent;
             }
 
@@ -468,7 +472,7 @@ function updateDashboard() {
         `;
     } else {
         recentProjectsEl.innerHTML = recentProjects.map(project => `
-            <div class="project-card" style="border-left-color: ${project.color || '#1db954'}">
+            <div class="project-card" style="border-left-color: ${project.color || '#1db954'}; cursor: pointer;" onclick="window.openProjectDetail('${project.id}')">
                 <div class="project-header">
                     <div>
                         <div class="project-title">${escapeHtml(project.name)}</div>
