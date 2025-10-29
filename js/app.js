@@ -3389,6 +3389,7 @@ function showConfirmDialog(title, message, confirmText = 'Delete', confirmClass 
         const messageEl = document.getElementById('confirmModalMessage');
         const cancelBtn = document.getElementById('confirmModalCancel');
         const confirmBtn = document.getElementById('confirmModalConfirm');
+        const backdrop = modal.querySelector('.modal-backdrop');
 
         titleEl.textContent = title;
         messageEl.textContent = message;
@@ -3416,12 +3417,17 @@ function showConfirmDialog(title, message, confirmText = 'Delete', confirmClass 
         const cleanup = () => {
             cancelBtn.removeEventListener('click', handleCancel);
             confirmBtn.removeEventListener('click', handleConfirm);
+            if (backdrop) backdrop.removeEventListener('click', handleCancel);
         };
 
         cancelBtn.addEventListener('click', handleCancel);
         confirmBtn.addEventListener('click', handleConfirm);
+        if (backdrop) backdrop.addEventListener('click', handleCancel);
     });
 }
+
+// Make showConfirmDialog available globally
+window.showConfirmDialog = showConfirmDialog;
 
 // ============================================
 // INITIALIZATION

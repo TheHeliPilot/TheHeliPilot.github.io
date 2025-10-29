@@ -570,19 +570,48 @@ async function saveNewStudyCard() {
 // NOTE FILES MANAGEMENT
 // ============================================
 
-// Create new note file
-async function createNewNoteFile() {
+// Open note file title modal
+function openNoteFileTitleModal() {
+    const modal = document.getElementById('noteFileTitleModal');
+    const input = document.getElementById('noteFileTitle');
+    input.value = '';
+    modal.classList.remove('hidden');
+
+    // Focus input after a short delay to ensure modal is visible
+    setTimeout(() => input.focus(), 100);
+
+    // Allow Enter key to submit
+    input.onkeydown = (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            confirmNoteFileTitle();
+        }
+    };
+}
+
+// Close note file title modal
+window.closeNoteFileTitleModal = function() {
+    const modal = document.getElementById('noteFileTitleModal');
+    modal.classList.add('hidden');
+};
+
+// Confirm and create note file
+window.confirmNoteFileTitle = async function() {
+    const input = document.getElementById('noteFileTitle');
+    const title = input.value.trim() || 'Untitled Note';
+
+    // Close modal
+    closeNoteFileTitleModal();
+
+    // Create note file
     if (!currentProject) {
         showNotification('No project selected', 'error');
         return;
     }
 
-    const title = prompt('Enter note file title:', 'Untitled Note');
-    if (!title) return;
-
     const noteFile = {
         id: Date.now().toString(),
-        title: title.trim(),
+        title: title,
         content: '',
         selected: true,  // Include in generation by default
         createdAt: Date.now(),
@@ -612,6 +641,16 @@ async function createNewNoteFile() {
         console.error('Error creating note file:', error);
         showNotification('Failed to create note file', 'error');
     }
+};
+
+// Create new note file (opens modal)
+async function createNewNoteFile() {
+    if (!currentProject) {
+        showNotification('No project selected', 'error');
+        return;
+    }
+
+    openNoteFileTitleModal();
 }
 
 // Sort note files based on current sort order
@@ -785,7 +824,13 @@ function renderNoteFilesList() {
                 e.stopPropagation();
                 const fileId = card.dataset.fileId;
                 const fileTitle = deleteBtn.dataset.fileTitle;
-                if (confirm(`Delete "${fileTitle}"?`)) {
+                const confirmed = await showConfirmDialog(
+                    'Delete Note File',
+                    `Are you sure you want to delete "${fileTitle}"? This action cannot be undone.`,
+                    'Delete',
+                    'btn-danger'
+                );
+                if (confirmed) {
                     await deleteNoteFile(fileId);
                 }
             });
@@ -1112,7 +1157,12 @@ async function saveCurrentNoteFile() {
     if (!currentNoteFile || !currentProject) return;
 
     try {
-        const title = document.getElementById('currentNoteTitle').value.trim();
+        const titleInput = document.getElementById('currentNoteTitle');
+        if (!titleInput) {
+            // Element doesn't exist, likely not in inline editor mode
+            return;
+        }
+        const title = titleInput.value.trim();
         const content = quillEditor ? quillEditor.root.innerHTML : '';
 
         // Update current file

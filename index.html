@@ -1703,6 +1703,35 @@
         </div>
     </div>
 
+    <!-- Note File Title Modal -->
+    <div id="noteFileTitleModal" class="modal hidden">
+        <div class="modal-backdrop" onclick="closeNoteFileTitleModal()"></div>
+        <div class="modal-content" style="max-width: 450px;">
+            <div class="modal-header">
+                <h3>New Note File</h3>
+                <button class="modal-close" onclick="closeNoteFileTitleModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="noteFileTitle">Note File Title</label>
+                    <input
+                        type="text"
+                        id="noteFileTitle"
+                        class="form-control"
+                        placeholder="Untitled Note"
+                        autocomplete="off"
+                    >
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeNoteFileTitleModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="confirmNoteFileTitle()">Create</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Generation Progress Modal -->
     <div id="generationProgressModal" class="modal hidden">
         <div class="modal-backdrop"></div>
