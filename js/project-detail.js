@@ -2155,7 +2155,7 @@ function showMindMapColorPicker(event, nodeId) {
     }, 100);
 }
 
-// Render mind map
+// Render mind map - SIMPLE STATIC VERSION (NO PHYSICS)
 function renderMindMap() {
     const mindMapContainer = document.getElementById('projectMindMapContainer');
     const svgElement = document.getElementById('projectMindMapSvg');
@@ -2186,135 +2186,198 @@ function renderMindMap() {
     const width = mindMapContainer.clientWidth;
     const height = mindMapContainer.clientHeight;
 
-    console.log('Rendering physics-based mind map with cards:', studyCards);
-
-    // Track mouse position for attraction force
-    let mouseX = width / 2;
-    let mouseY = height / 2;
-
     // Helper to calculate node width
     const calculateNodeWidth = (name) => {
         const textLength = name.length;
-        return Math.max(140, textLength * 8.5 + 50);
+        return Math.max(140, Math.min(textLength * 8.5 + 50, 300));
     };
 
-    // Get test cards for this project
-    const testCards = window.cards ? window.cards.filter(c => c.projectId === project.id) : [];
-    console.log('Test cards:', testCards);
+    console.log('Rendering mindmap with study cards:', studyCards.length);
 
-    // Build nodes and links for force simulation
-    function buildForceData(studyCards, testCards) {
-        // Study cards positioning
-        const levelGroups = {};
-        studyCards.forEach((card, index) => {
-            const level = card.level || 0;
-            if (!levelGroups[level]) levelGroups[level] = [];
-            levelGroups[level].push(index);
-        });
+    // Mastery colors
+    const masteryColors = {
+        'mastered': '#43e97b',
+        'good': '#48dbfb',
+        'learning': '#feca57',
+        'weak': '#ff6b6b',
+        'none': '#6b7280'  // Default for unlearnt
+    };
 
-        // Create nodes for study cards
-        const nodes = studyCards.map((card, index) => {
+    // Group cards by level for hierarchical layout
+    const levelGroups = {};
+    studyCards.forEach((card, index) => {
+        const level = card.level || 0;
+        if (!levelGroups[level]) levelGroups[level] = [];
+        levelGroups[level].push({ card, index });
+    });
+
+    const levels = Object.keys(levelGroups).map(Number).sort((a, b) => a - b);
+    const verticalSpacing = Math.max(120, height / (levels.length + 1.5));
+    const horizontalPadding = 60;
+    const minNodeSpacing = 60;  // Increased gap to prevent overlaps
+
+    // Build nodes with parent-aware positioning
+    const nodes = [];
+    const nodeMap = new Map();
+
+    // First pass: create all nodes with temporary positions
+    levels.forEach((level, levelIdx) => {
+        const cardsInLevel = levelGroups[level];
+        const y = verticalSpacing * (levelIdx + 1);
+
+        cardsInLevel.forEach(({ card, index }) => {
             const name = card.topic || card.term || card.name || card.title || `Card ${index + 1}`;
             const nodeWidth = calculateNodeWidth(name);
-            const level = card.level || 0;
+            const mastery = card.mastery || 'none';
+            const masteryColor = masteryColors[mastery];
 
-            // Position nodes in a radial layout by level
-            const levelNodes = levelGroups[level];
-            const nodeIndexInLevel = levelNodes.indexOf(index);
-            const angleStep = (2 * Math.PI) / levelNodes.length;
-            const angle = nodeIndexInLevel * angleStep - Math.PI / 2; // Start from top
-            const radius = 100 + level * 150; // Distance from center increases with level
-
-            // Get mastery-based border color
-            const masteryColors = {
-                'mastered': '#43e97b',  // Green
-                'good': '#48dbfb',      // Cyan
-                'learning': '#feca57', // Yellow
-                'weak': '#ff6b6b'      // Red
-            };
-            const masteryColor = card.mastery ? masteryColors[card.mastery] : null;
-
-            return {
-                id: `study-${index}`,
+            const node = {
+                id: index,
                 originalIndex: index,
                 type: 'study',
                 name: name,
                 definition: card.content || card.definition || card.description || '',
                 level: level,
                 color: card.color || '#667eea',
-                mastery: card.mastery,
+                mastery: mastery,
                 masteryColor: masteryColor,
                 lastStudied: card.lastStudied,
                 parentIndex: card.parentIndex,
                 width: nodeWidth,
-                radius: nodeWidth / 2 + 20, // Half width + padding
-                x: width / 2 + Math.cos(angle) * radius,
-                y: height / 2 + Math.sin(angle) * radius
+                x: 0,  // Will be calculated in second pass
+                y: y,
+                children: []
             };
+
+            nodes.push(node);
+            nodeMap.set(index, node);
         });
+    });
 
-        // Add test card nodes (positioned around their related study cards)
-        testCards.forEach((testCard, testIndex) => {
-            const relatedStudyIndex = testCard.relatedStudyCard;
-            if (relatedStudyIndex !== undefined && relatedStudyIndex >= 0 && relatedStudyIndex < studyCards.length) {
-                const relatedNode = nodes[relatedStudyIndex];
+    // Build parent-child relationships
+    nodes.forEach(node => {
+        if (node.parentIndex !== null && node.parentIndex !== undefined) {
+            const parent = nodeMap.get(node.parentIndex);
+            if (parent) {
+                parent.children.push(node);
+            }
+        }
+    });
 
-                // Position test node near its study card (offset by angle)
-                const offsetAngle = (testIndex * Math.PI / 6); // Distribute around study node
-                const offsetDistance = 120;
+    // Second pass: position nodes level by level, considering parents
+    levels.forEach((level, levelIdx) => {
+        const nodesInLevel = nodes.filter(n => n.level === level);
 
-                const nodeWidth = calculateNodeWidth(`Test ${testIndex + 1}`);
+        if (level === 0) {
+            // Root level: evenly distribute across width
+            const totalCardWidth = nodesInLevel.reduce((sum, n) => sum + n.width, 0);
+            const totalSpacing = minNodeSpacing * Math.max(0, nodesInLevel.length - 1);
+            const totalNeeded = totalCardWidth + totalSpacing;
+            const availableWidth = width - (horizontalPadding * 2);
 
-                nodes.push({
-                    id: `test-${testIndex}`,
-                    originalIndex: testIndex,
-                    type: 'test',
-                    name: `Test: ${testCard.question.substring(0, 40)}...`,
-                    definition: testCard.question,
-                    level: relatedNode.level,
-                    color: '#9333ea', // Purple for test cards
-                    mastery: testCard.mastered ? 'mastered' : null,
-                    masteryColor: testCard.mastered ? '#43e97b' : null,
-                    relatedStudyCard: relatedStudyIndex,
-                    difficulty: testCard.difficulty,
-                    width: nodeWidth,
-                    radius: nodeWidth / 2 + 15,
-                    x: relatedNode.x + Math.cos(offsetAngle) * offsetDistance,
-                    y: relatedNode.y + Math.sin(offsetAngle) * offsetDistance
+            // Center the entire level
+            let currentX = horizontalPadding + Math.max(0, (availableWidth - totalNeeded) / 2);
+
+            nodesInLevel.forEach(node => {
+                node.x = currentX + node.width / 2;
+                currentX += node.width + minNodeSpacing;
+            });
+        } else {
+            // Child levels: position under parents, then resolve overlaps
+            const positioned = new Set();
+
+            // First, position all children under their parents
+            nodesInLevel.forEach(node => {
+                if (positioned.has(node.id)) return;
+
+                const parent = nodeMap.get(node.parentIndex);
+                if (parent) {
+                    // Get all siblings (children of same parent at this level)
+                    const siblings = parent.children.filter(c => c.level === level);
+
+                    // Calculate total width of siblings
+                    const totalSiblingWidth = siblings.reduce((sum, s) => sum + s.width, 0);
+                    const totalSiblingSpacing = minNodeSpacing * Math.max(0, siblings.length - 1);
+                    const totalSiblingNeeded = totalSiblingWidth + totalSiblingSpacing;
+
+                    // Center siblings under parent
+                    let siblingX = parent.x - totalSiblingNeeded / 2;
+
+                    siblings.forEach(sibling => {
+                        sibling.x = siblingX + sibling.width / 2;
+                        siblingX += sibling.width + minNodeSpacing;
+                        positioned.add(sibling.id);
+                    });
+                } else {
+                    // No parent - position at center
+                    if (!positioned.has(node.id)) {
+                        node.x = width / 2;
+                        positioned.add(node.id);
+                    }
+                }
+            });
+
+            // Now resolve all overlaps by iterating until no overlaps remain
+            let hasOverlap = true;
+            let iterations = 0;
+            const maxIterations = 10;
+
+            while (hasOverlap && iterations < maxIterations) {
+                hasOverlap = false;
+                iterations++;
+
+                const sortedByX = nodesInLevel.slice().sort((a, b) => a.x - b.x);
+
+                // Check and fix overlaps from left to right
+                for (let i = 1; i < sortedByX.length; i++) {
+                    const prev = sortedByX[i - 1];
+                    const curr = sortedByX[i];
+                    const requiredDistance = (prev.width + curr.width) / 2 + minNodeSpacing;
+                    const actualDistance = curr.x - prev.x;
+
+                    if (actualDistance < requiredDistance) {
+                        hasOverlap = true;
+                        const shift = requiredDistance - actualDistance;
+                        curr.x += shift;
+                    }
+                }
+
+                // Ensure all nodes are within bounds
+                sortedByX.forEach(node => {
+                    const minBound = horizontalPadding + node.width / 2;
+                    const maxBound = width - horizontalPadding - node.width / 2;
+
+                    if (node.x < minBound) {
+                        node.x = minBound;
+                        hasOverlap = true;
+                    } else if (node.x > maxBound) {
+                        node.x = maxBound;
+                        hasOverlap = true;
+                    }
                 });
             }
-        });
+        }
+    });
 
-        // Build links
-        const links = [];
+    console.log('Created nodes:', nodes.length);
 
-        // Links between study cards (hierarchy)
-        studyCards.forEach((card, index) => {
-            if (card.parentIndex !== null && card.parentIndex !== undefined && card.parentIndex >= 0) {
+    // Build links between study cards (hierarchy only)
+    const links = [];
+    studyCards.forEach((card, index) => {
+        if (card.parentIndex !== null && card.parentIndex !== undefined && card.parentIndex >= 0) {
+            const sourceNode = nodeMap.get(card.parentIndex);
+            const targetNode = nodeMap.get(index);
+            if (sourceNode && targetNode) {
                 links.push({
-                    source: `study-${card.parentIndex}`,
-                    target: `study-${index}`,
+                    source: sourceNode,
+                    target: targetNode,
                     type: 'hierarchy'
                 });
             }
-        });
+        }
+    });
 
-        // Links from test cards to their related study cards
-        testCards.forEach((testCard, testIndex) => {
-            if (testCard.relatedStudyCard !== undefined && testCard.relatedStudyCard >= 0) {
-                links.push({
-                    source: `study-${testCard.relatedStudyCard}`,
-                    target: `test-${testIndex}`,
-                    type: 'test-link'
-                });
-            }
-        });
-
-        return { nodes, links };
-    }
-
-    const { nodes, links } = buildForceData(studyCards, testCards);
-    console.log('Force simulation data:', { nodes, links });
+    console.log('Created links:', links.length);
 
     // Setup SVG
     const svg = d3.select(svgElement);
@@ -2333,14 +2396,7 @@ function renderMindMap() {
 
     svg.call(zoom);
 
-    // Mouse tracking for attraction force
-    svg.on('mousemove', (event) => {
-        const [x, y] = d3.pointer(event);
-        mouseX = x;
-        mouseY = y;
-    });
-
-    // Double-click to reset
+    // Double-click to reset zoom
     svg.on('dblclick.zoom', null);
     svg.on('dblclick', () => {
         svg.transition().duration(750).call(
@@ -2349,130 +2405,90 @@ function renderMindMap() {
         );
     });
 
-    // Custom force to attract nodes towards mouse
-    function mouseForce(alpha) {
-        const strength = 0.15 * alpha;
-        for (let i = 0; i < nodes.length; i++) {
-            const node = nodes[i];
-            const dx = mouseX - node.x;
-            const dy = mouseY - node.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            if (distance > 0 && distance < 400) {
-                const force = strength / distance;
-                node.vx += dx * force;
-                node.vy += dy * force;
-            }
-        }
-    }
-
-    // Create force simulation with springy physics
-    const simulation = d3.forceSimulation(nodes)
-        .force('link', d3.forceLink(links)
-            .id(d => d.id)
-            .distance(d => {
-                // Dynamic distance based on source and target node widths
-                const sourceRadius = d.source.radius || 80;
-                const targetRadius = d.target.radius || 80;
-                return sourceRadius + targetRadius + 80; // Sum of radii + extra spacing
-            })
-            .strength(0.3))
-        .force('charge', d3.forceManyBody()
-            .strength(-1200)
-            .distanceMax(500))
-        .force('collision', d3.forceCollide()
-            .radius(d => d.radius || 80)
-            .strength(0.9)
-            .iterations(3))
-        .force('center', d3.forceCenter(width / 2, height / 2)
-            .strength(0.05))
-        .force('mouse', mouseForce)
-        .alphaDecay(0.02)
-        .velocityDecay(0.3);
-
-    // Draw links (springy connections with different styles)
-    const linkElements = container.selectAll('.mind-map-link')
+    // Draw links (static straight lines)
+    const linkElements = container.append('g')
+        .selectAll('line')
         .data(links)
-        .enter().append('line')
+        .join('line')
         .attr('class', 'mind-map-link')
-        .attr('stroke', d => {
-            if (d.type === 'test-link') {
-                return '#9333ea'; // Purple for test links
-            }
-            // Use target node's color for hierarchy links
-            return d.target.color || '#667eea';
-        })
-        .attr('stroke-width', d => d.type === 'test-link' ? 2 : 2.5)
-        .attr('stroke-opacity', d => d.type === 'test-link' ? 0.3 : 0.4)
-        .attr('stroke-dasharray', d => d.type === 'test-link' ? '5,5' : 'none')
-        .style('stroke-linecap', 'round')
-        .style('transition', 'all 0.3s ease');
+        .attr('x1', d => d.source.x)
+        .attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x)
+        .attr('y2', d => d.target.y)
+        .attr('stroke', d => d.target.color || '#667eea')
+        .attr('stroke-width', 2.5)
+        .attr('stroke-opacity', 0.4)
+        .style('stroke-linecap', 'round');
 
     // Draw nodes
-    const nodeGroups = container.selectAll('.mind-map-node')
+    const nodeGroups = container.append('g')
+        .selectAll('g')
         .data(nodes)
-        .enter().append('g')
+        .join('g')
         .attr('class', 'mind-map-node')
         .attr('data-node-id', d => d.id)
-        .call(d3.drag()
-            .on('start', dragStarted)
-            .on('drag', dragged)
-            .on('end', dragEnded));
+        .attr('transform', d => `translate(${d.x},${d.y})`);
 
     // Rectangle dimensions
-    const getRectWidth = (d) => d.width; // Use pre-calculated width
-    const rectHeight = 56;
-    const accentWidth = 6;
+    const getRectWidth = (d) => d.width;
+    const rectHeight = 64;  // Increased height for more padding
+    const accentWidth = 4;  // Slightly thinner accent bar
+
+    // Progress glow background for nodes with mastery
+    nodeGroups.append('rect')
+        .attr('class', 'progress-glow')
+        .attr('x', d => -getRectWidth(d) / 2 - 10)
+        .attr('y', -rectHeight / 2 - 10)
+        .attr('width', d => getRectWidth(d) + 20)
+        .attr('height', rectHeight + 20)
+        .attr('rx', 14)
+        .attr('ry', 14)
+        .attr('fill', d => d.masteryColor || 'none')
+        .attr('opacity', d => d.masteryColor ? 0.2 : 0)
+        .style('filter', d => d.masteryColor ? `blur(12px)` : 'none')
+        .attr('pointer-events', 'none');
 
     // Main dark rectangle background
     nodeGroups.append('rect')
+        .attr('class', 'main-rect')
         .attr('x', d => -getRectWidth(d) / 2)
         .attr('y', -rectHeight / 2)
         .attr('width', d => getRectWidth(d))
         .attr('height', rectHeight)
-        .attr('rx', 12)
-        .attr('ry', 12)
+        .attr('rx', 8)
+        .attr('ry', 8)
         .attr('fill', '#1e2329')
         .attr('stroke', d => d.masteryColor || d.color || '#667eea')
-        .attr('stroke-width', d => d.masteryColor ? 3 : 1.5)
-        .attr('stroke-opacity', d => d.masteryColor ? 0.9 : 0.3)
+        .attr('stroke-width', d => d.masteryColor ? 2.5 : 1.5)
+        .attr('stroke-opacity', d => d.masteryColor ? 0.8 : 0.3)
         .style('filter', d => d.masteryColor ?
-            `drop-shadow(0 0 8px ${d.masteryColor}) drop-shadow(0 6px 16px rgba(0,0,0,0.5))` :
-            'drop-shadow(0 6px 16px rgba(0,0,0,0.5))')
-        .style('cursor', 'grab')
-        .style('transition', 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)');
+            `drop-shadow(0 0 10px ${d.masteryColor}40) drop-shadow(0 4px 12px rgba(0,0,0,0.4))` :
+            'drop-shadow(0 4px 12px rgba(0,0,0,0.4))')
+        .style('transition', 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)')
+        .attr('pointer-events', 'none');
 
-    // Colored accent bar on the left (gradient effect)
+    // Colored accent bar on the left
     nodeGroups.append('rect')
+        .attr('class', 'accent-bar')
         .attr('x', d => -getRectWidth(d) / 2)
         .attr('y', -rectHeight / 2)
         .attr('width', accentWidth)
         .attr('height', rectHeight)
-        .attr('rx', 12)
-        .attr('ry', 12)
+        .attr('rx', 8)
+        .attr('ry', 8)
         .attr('fill', d => d.color || '#667eea')
-        .attr('opacity', 0.9)
-        .style('cursor', 'grab')
+        .attr('opacity', 1)
         .style('transition', 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)')
-        .attr('pointer-events', 'none');
-
-    // Small color dot indicator in top right with glow
-    nodeGroups.append('circle')
-        .attr('cx', d => getRectWidth(d) / 2 - 14)
-        .attr('cy', -rectHeight / 2 + 14)
-        .attr('r', 5)
-        .attr('fill', d => d.color || '#667eea')
-        .style('filter', 'drop-shadow(0 0 6px ' + ((d) => d.color || '#667eea') + ')')
-        .attr('opacity', 0.8)
         .attr('pointer-events', 'none');
 
     // Name label inside rectangle
     nodeGroups.append('text')
         .text(d => d.name)
-        .attr('x', d => -getRectWidth(d) / 2 + accentWidth + 12)
+        .attr('x', d => -getRectWidth(d) / 2 + accentWidth + 14)
         .attr('text-anchor', 'start')
-        .attr('dy', -5)
-        .attr('fill', '#d2dae3')
-        .attr('font-size', '13px')
+        .attr('dy', -8)
+        .attr('fill', '#e8eaed')
+        .attr('font-size', '14px')
         .attr('font-weight', '600')
         .attr('pointer-events', 'none');
 
@@ -2484,52 +2500,68 @@ function renderMindMap() {
             }
             return d.level >= 0 ? `Level ${d.level}` : '';
         })
-        .attr('x', d => -getRectWidth(d) / 2 + accentWidth + 12)
+        .attr('x', d => -getRectWidth(d) / 2 + accentWidth + 14)
         .attr('text-anchor', 'start')
-        .attr('dy', 12)
+        .attr('dy', 10)
         .attr('fill', '#9da7b3')
-        .attr('font-size', '10px')
+        .attr('font-size', '11px')
         .attr('font-weight', '500')
         .attr('pointer-events', 'none');
 
-    // Add progress glow background for nodes with mastery
-    nodeGroups.insert('rect', 'rect')
-        .attr('class', 'progress-glow')
-        .attr('x', d => -getRectWidth(d) / 2 - 8)
-        .attr('y', -rectHeight / 2 - 8)
-        .attr('width', d => getRectWidth(d) + 16)
-        .attr('height', rectHeight + 16)
-        .attr('rx', 16)
-        .attr('ry', 16)
-        .attr('fill', d => d.masteryColor || 'none')
-        .attr('opacity', d => d.masteryColor ? 0.15 : 0)
-        .style('filter', d => d.masteryColor ? `blur(10px)` : 'none')
+    // Mastery badge on the right
+    const masteryLabels = {
+        'mastered': '✓ Mastered',
+        'good': 'Good',
+        'learning': 'Learning',
+        'weak': 'Weak',
+        'none': 'Not studied'
+    };
+
+    nodeGroups.append('text')
+        .text(d => masteryLabels[d.mastery] || 'Not studied')
+        .attr('x', d => getRectWidth(d) / 2 - 10)
+        .attr('text-anchor', 'end')
+        .attr('dy', 8)  // Moved down more
+        .attr('fill', d => d.masteryColor)
+        .attr('font-size', '10px')
+        .attr('font-weight', '600')
+        .attr('opacity', 0.85)
         .attr('pointer-events', 'none');
 
-    // Hover and click effects with smooth animations
+    // Larger invisible hover area
+    nodeGroups.append('rect')
+        .attr('x', d => -getRectWidth(d) / 2 - 12)
+        .attr('y', -rectHeight / 2 - 12)
+        .attr('width', d => getRectWidth(d) + 24)
+        .attr('height', rectHeight + 24)
+        .attr('fill', 'transparent')
+        .style('cursor', 'pointer');
+
+    // Hover and click effects
     nodeGroups.on('mouseenter', function(event, d) {
         const nodeColor = d.color || '#667eea';
 
-        d3.select(this).selectAll('rect').filter((d, i) => i === 0)
+        // Main rect
+        d3.select(this).select('.main-rect')
             .transition()
-            .duration(300)
-            .ease(d3.easeCubicOut)
+            .duration(200)
             .attr('stroke', nodeColor)
-            .attr('stroke-width', 2.5)
-            .attr('stroke-opacity', 0.8)
-            .style('filter', 'drop-shadow(0 8px 24px rgba(0,0,0,0.7))');
+            .attr('stroke-width', 3)
+            .attr('stroke-opacity', 0.9)
+            .style('filter', 'drop-shadow(0 6px 20px rgba(0,0,0,0.5))');
 
-        d3.select(this).selectAll('rect').filter((d, i) => i === 1)
+        // Accent bar
+        d3.select(this).select('.accent-bar')
             .transition()
-            .duration(300)
-            .ease(d3.easeCubicOut)
-            .attr('width', accentWidth + 3)
+            .duration(200)
+            .attr('width', accentWidth + 2)
             .attr('opacity', 1);
 
         if (tooltip) {
             tooltip.querySelector('h4').textContent = d.name;
             tooltip.querySelector('p').textContent = d.definition || 'No description';
             tooltip.style.opacity = '1';
+            tooltip.style.visibility = 'visible';
         }
     })
     .on('mousemove', function(event) {
@@ -2542,24 +2574,27 @@ function renderMindMap() {
     .on('mouseleave', function(event, d) {
         const nodeColor = d.color || '#667eea';
 
-        d3.select(this).selectAll('rect').filter((d, i) => i === 0)
+        // Main rect
+        d3.select(this).select('.main-rect')
             .transition()
-            .duration(300)
-            .ease(d3.easeCubicOut)
-            .attr('stroke', nodeColor)
-            .attr('stroke-width', 1.5)
-            .attr('stroke-opacity', 0.3)
-            .style('filter', 'drop-shadow(0 6px 16px rgba(0,0,0,0.5))');
+            .duration(200)
+            .attr('stroke', d.masteryColor || nodeColor)
+            .attr('stroke-width', d.masteryColor ? 2.5 : 1.5)
+            .attr('stroke-opacity', d.masteryColor ? 0.8 : 0.3)
+            .style('filter', d.masteryColor ?
+                `drop-shadow(0 0 10px ${d.masteryColor}40) drop-shadow(0 4px 12px rgba(0,0,0,0.4))` :
+                'drop-shadow(0 4px 12px rgba(0,0,0,0.4))');
 
-        d3.select(this).selectAll('rect').filter((d, i) => i === 1)
+        // Accent bar
+        d3.select(this).select('.accent-bar')
             .transition()
-            .duration(300)
-            .ease(d3.easeCubicOut)
+            .duration(200)
             .attr('width', accentWidth)
-            .attr('opacity', 0.9);
+            .attr('opacity', 1);
 
         if (tooltip) {
             tooltip.style.opacity = '0';
+            tooltip.style.visibility = 'hidden';
         }
     })
     .on('click', function(event, d) {
@@ -2568,85 +2603,6 @@ function renderMindMap() {
             showMindMapColorPicker(event, d.id);
         }
     });
-
-    // Update positions on each simulation tick
-    simulation.on('tick', () => {
-        linkElements
-            .attr('x1', d => d.source.x)
-            .attr('y1', d => d.source.y)
-            .attr('x2', d => d.target.x)
-            .attr('y2', d => d.target.y);
-
-        nodeGroups
-            .attr('transform', d => `translate(${d.x},${d.y})`);
-    });
-
-    // Auto-fit view after simulation settles
-    simulation.on('end', () => {
-        autoFitView();
-    });
-
-    // Auto-fit function
-    function autoFitView() {
-        if (nodes.length === 0) return;
-
-        // Calculate bounding box of all nodes
-        let minX = Infinity, maxX = -Infinity;
-        let minY = Infinity, maxY = -Infinity;
-
-        nodes.forEach(node => {
-            const nodeWidth = node.width || 140;
-            minX = Math.min(minX, node.x - nodeWidth / 2);
-            maxX = Math.max(maxX, node.x + nodeWidth / 2);
-            minY = Math.min(minY, node.y - rectHeight / 2);
-            maxY = Math.max(maxY, node.y + rectHeight / 2);
-        });
-
-        // Add padding
-        const padding = 100;
-        minX -= padding;
-        maxX += padding;
-        minY -= padding;
-        maxY += padding;
-
-        // Calculate scale and translate
-        const boundingWidth = maxX - minX;
-        const boundingHeight = maxY - minY;
-        const scale = Math.min(width / boundingWidth, height / boundingHeight, 1);
-        const translateX = (width - boundingWidth * scale) / 2 - minX * scale;
-        const translateY = (height - boundingHeight * scale) / 2 - minY * scale;
-
-        // Smoothly transition to fit view
-        svg.transition()
-            .duration(1000)
-            .call(
-                zoom.transform,
-                d3.zoomIdentity.translate(translateX, translateY).scale(scale)
-            );
-    }
-
-    // Trigger auto-fit after 3 seconds (when simulation settles)
-    setTimeout(autoFitView, 3000);
-
-    // Drag functions
-    function dragStarted(event, d) {
-        if (!event.active) simulation.alphaTarget(0.3).restart();
-        d.fx = d.x;
-        d.fy = d.y;
-        d3.select(this).style('cursor', 'grabbing');
-    }
-
-    function dragged(event, d) {
-        d.fx = event.x;
-        d.fy = event.y;
-    }
-
-    function dragEnded(event, d) {
-        if (!event.active) simulation.alphaTarget(0);
-        d.fx = null;
-        d.fy = null;
-        d3.select(this).style('cursor', 'grab');
-    }
 }
 
 // Study Mode State
@@ -2736,8 +2692,8 @@ function startStudyMode() {
         return;
     }
 
-    // Sort cards in hierarchical order (breadth-first traversal)
-    studyModeState.cards = sortCardsHierarchically(currentProject.studyCards);
+    // Sort cards with spaced repetition prioritization
+    studyModeState.cards = sortCardsWithSpacedRepetition(currentProject.studyCards);
     studyModeState.currentIndex = 0;
 
     // Navigate to study mode page
@@ -2757,6 +2713,65 @@ function startStudyMode() {
 
     // Display first card
     displayStudyCard();
+}
+
+// Sort cards using spaced repetition algorithm
+function sortCardsWithSpacedRepetition(cards) {
+    const now = new Date().getTime();
+
+    // Calculate priority for each card based on spaced repetition
+    const cardsWithPriority = cards.map((card, index) => {
+        const mastery = card.mastery || 'none';
+        const lastStudied = card.lastStudied ? new Date(card.lastStudied).getTime() : 0;
+        const daysSinceStudied = (now - lastStudied) / (1000 * 60 * 60 * 24);
+
+        // Priority score (lower = higher priority)
+        let priority = 0;
+
+        // Mastery-based priority
+        const masteryPriority = {
+            'none': 1,      // Highest priority - never studied
+            'weak': 2,      // Very high priority - needs review
+            'learning': 3,  // Medium-high priority
+            'good': 4,      // Medium priority
+            'mastered': 5   // Lowest priority
+        };
+        priority += masteryPriority[mastery] * 1000;
+
+        // Time-based priority (spaced repetition intervals)
+        const intervals = {
+            'none': 0,       // Review immediately
+            'weak': 1,       // Review after 1 day
+            'learning': 3,   // Review after 3 days
+            'good': 7,       // Review after 7 days
+            'mastered': 14   // Review after 14 days
+        };
+
+        const targetInterval = intervals[mastery];
+        const needsReview = daysSinceStudied >= targetInterval;
+
+        if (needsReview) {
+            // Cards that need review get higher priority
+            priority -= (daysSinceStudied - targetInterval) * 100;
+        } else {
+            // Cards that don't need review yet get lower priority
+            priority += (targetInterval - daysSinceStudied) * 100;
+        }
+
+        // Add some hierarchy consideration (prefer lower levels first for foundation)
+        priority += (card.level || 0) * 10;
+
+        return {
+            ...card,
+            originalIndex: index,
+            priority: priority,
+            needsReview: needsReview,
+            daysSinceStudied: daysSinceStudied
+        };
+    });
+
+    // Sort by priority (ascending - lower priority value = shown first)
+    return cardsWithPriority.sort((a, b) => a.priority - b.priority);
 }
 
 // Expose functions for study materials viewer
@@ -2853,15 +2868,17 @@ function displayStudyCard() {
     document.getElementById('studyModePrev').disabled = studyModeState.currentIndex === 0;
     document.getElementById('studyModeNext').disabled = studyModeState.currentIndex === totalCards - 1;
 
-    // Highlight current mastery level
-    const currentMastery = card.mastery || 'none';
+    // Highlight current mastery level (reset all first, then highlight current if exists)
+    const currentMastery = card.mastery || null;
     document.querySelectorAll('.mastery-btn').forEach(btn => {
-        if (btn.dataset.mastery === currentMastery) {
+        if (currentMastery && btn.dataset.mastery === currentMastery) {
             btn.style.transform = 'scale(1.05)';
             btn.style.boxShadow = '0 0 0 3px rgba(255,255,255,0.3)';
+            btn.style.opacity = '1';
         } else {
             btn.style.transform = 'scale(1)';
             btn.style.boxShadow = 'none';
+            btn.style.opacity = '0.8';
         }
     });
 }
@@ -2996,6 +3013,10 @@ async function setCardMastery(mastery) {
     const card = studyModeState.cards[studyModeState.currentIndex];
     const originalIndex = card.originalIndex;
 
+    // Update in studyModeState
+    card.mastery = mastery;
+    card.lastStudied = new Date().toISOString();
+
     // Update in current project
     if (currentProject.studyCards && currentProject.studyCards[originalIndex]) {
         currentProject.studyCards[originalIndex].mastery = mastery;
@@ -3019,14 +3040,21 @@ async function setCardMastery(mastery) {
                 if (btn.dataset.mastery === mastery) {
                     btn.style.transform = 'scale(1.05)';
                     btn.style.boxShadow = '0 0 0 3px rgba(255,255,255,0.3)';
+                    btn.style.opacity = '1';
                 } else {
                     btn.style.transform = 'scale(1)';
                     btn.style.boxShadow = 'none';
+                    btn.style.opacity = '0.8';
                 }
             });
 
             // Update mindmap analytics if on mindmap tab
             updateMindmapAnalytics(currentProject.studyCards);
+
+            // Refresh mindmap if visible to show updated mastery
+            if (document.getElementById('projectMindMapContainer')?.offsetParent !== null) {
+                renderMindMap();
+            }
 
             // Auto-advance to next card after short delay
             setTimeout(() => {

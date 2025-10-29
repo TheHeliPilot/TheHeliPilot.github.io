@@ -414,11 +414,11 @@ class GenerationOptimizer {
             }
         }
 
-        // Check Firebase (slower)
+        // Check Firebase (slower) - stored under user's path
         if (window.db && userId) {
             try {
                 const { ref, get } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
-                const cacheRef = ref(window.db, `cache/${userId}/${cacheKey}`);
+                const cacheRef = ref(window.db, `users/${userId}/generationCache/${cacheKey}`);
                 const snapshot = await get(cacheRef);
 
                 if (snapshot.exists()) {
@@ -449,11 +449,11 @@ class GenerationOptimizer {
             console.warn('Failed to save to localStorage (quota exceeded?):', e);
         }
 
-        // Save to Firebase
+        // Save to Firebase - stored under user's path
         if (window.db && userId) {
             try {
                 const { ref, set } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
-                const cacheRef = ref(window.db, `cache/${userId}/${cacheKey}`);
+                const cacheRef = ref(window.db, `users/${userId}/generationCache/${cacheKey}`);
                 await set(cacheRef, {
                     ...data,
                     cachedAt: Date.now(),

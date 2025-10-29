@@ -416,275 +416,153 @@ function renderMindMap() {
     d3.select('#mindMapSvg').selectAll('*').remove();
     if (mindMapSimulation) mindMapSimulation.stop();
 
-    // Build nodes and links (include mastery data, default to weak)
-    const nodes = cards.map((card, i) => ({
-        id: i,
-        topic: card.topic,
-        content: card.content,
-        level: card.level,
-        category: card.category,
-        mastery: card.mastery || 'weak'  // Default to weak (needs review)
-    }));
-
-    const links = [];
-    cards.forEach((card, i) => {
-        if (card.parentIndex !== null && card.parentIndex !== undefined) {
-            links.push({
-                source: card.parentIndex,
-                target: i
-            });
-        }
-    });
-
-    // Colors by level
-    const colorScale = d3.scaleOrdinal()
-        .domain([0, 1, 2])
-        .range(['#1db954', '#9d4edd', '#7c8591']);
-
-    // Radius by level
-    const radiusScale = d3.scaleOrdinal()
-        .domain([0, 1, 2])
-        .range([30, 20, 15]);
-
     // Create SVG
     const svg = d3.select('#mindMapSvg')
         .attr('viewBox', [0, 0, width, height]);
 
-    // Force simulation with physics (optimized for closer nodes)
-    mindMapSimulation = d3.forceSimulation(nodes)
-        .force('link', d3.forceLink(links)
-            .id(d => d.id)
-            .distance(60)  // Reduced from 100 to bring nodes closer
-            .strength(0.8))  // Increased strength for tighter connections
-        .force('charge', d3.forceManyBody()
-            .strength(-150)  // Reduced repulsion from -300
-            .distanceMax(250))  // Reduced from 400 for tighter layout
-        .force('center', d3.forceCenter(width / 2, height / 2))
-        .force('collision', d3.forceCollide()
-            .radius(d => radiusScale(d.level) + 8))  // Reduced padding
-        .force('x', d3.forceX(width / 2).strength(0.05))  // Gentle pull to center
-        .force('y', d3.forceY(height / 2).strength(0.05));  // Gentle pull to center
+    // Group cards by level for positioning
+    const levelGroups = {};
+    cards.forEach((card, i) => {
+        const level = card.level || 0;
+        if (!levelGroups[level]) levelGroups[level] = [];
+        levelGroups[level].push({ ...card, index: i });
+    });
 
-    // Draw links with curves to prevent overlap
-    const link = svg.append('g')
-        .selectAll('path')
+    const levels = Object.keys(levelGroups).map(Number).sort((a, b) => a - b);
+    const levelSpacing = Math.min(150, height / (levels.length + 1));
+
+    // Position nodes in simple tree layout
+    const nodes = [];
+    levels.forEach((level, levelIdx) => {
+        const cardsInLevel = levelGroups[level];
+        const spacing = width / (cardsInLevel.length + 1);
+        const y = levelSpacing * (levelIdx + 1);
+
+        cardsInLevel.forEach((card, idx) => {
+            const x = spacing * (idx + 1);
+            nodes.push({
+                id: card.index,
+                x: x,
+                y: y,
+                topic: card.topic || 'Untitled',
+                content: card.content || '',
+                level: level,
+                mastery: card.mastery || 'weak',
+                parentIndex: card.parentIndex
+            });
+        });
+    });
+
+    // Create links
+    const links = [];
+    nodes.forEach(node => {
+        if (node.parentIndex !== null && node.parentIndex !== undefined) {
+            const parent = nodes.find(n => n.id === node.parentIndex);
+            if (parent) {
+                links.push({ source: parent, target: node });
+            }
+        }
+    });
+
+    // Colors and sizes
+    const colorScale = d3.scaleOrdinal()
+        .domain([0, 1, 2])
+        .range(['#667eea', '#9d4edd', '#7c8591']);
+
+    const radiusScale = d3.scaleOrdinal()
+        .domain([0, 1, 2])
+        .range([35, 25, 20]);
+
+    const masteryColors = {
+        'mastered': '#10b981',
+        'good': '#3b82f6',
+        'learning': '#f59e0b',
+        'weak': '#ef4444',
+        'none': '#6b7280'
+    };
+
+    // Draw links
+    svg.append('g')
+        .selectAll('line')
         .data(links)
-        .join('path')
+        .join('line')
+        .attr('x1', d => d.source.x)
+        .attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x)
+        .attr('y2', d => d.target.y)
         .attr('stroke', '#3c4652')
         .attr('stroke-width', 2)
-        .attr('stroke-opacity', 0.6)
-        .attr('fill', 'none')
-        .style('transition', 'all 0.3s ease')
-        .on('mouseover', function() {
-            d3.select(this)
-                .attr('stroke', '#667eea')
-                .attr('stroke-width', 3)
-                .attr('stroke-opacity', 0.9);
-        })
-        .on('mouseout', function() {
-            d3.select(this)
-                .attr('stroke', '#3c4652')
-                .attr('stroke-width', 2)
-                .attr('stroke-opacity', 0.6);
-        });
+        .attr('stroke-opacity', 0.4);
 
     // Draw nodes
-    const node = svg.append('g')
+    const nodeGroups = svg.append('g')
         .selectAll('g')
         .data(nodes)
         .join('g')
-        .call(drag(mindMapSimulation));
+        .attr('transform', d => `translate(${d.x},${d.y})`);
 
-    // Mastery color mapping
-    const masteryColors = {
-        'mastered': '#10b981',  // Green
-        'good': '#3b82f6',      // Blue
-        'learning': '#f59e0b',  // Orange
-        'weak': '#ef4444',      // Red
-        'none': '#6b7280'       // Gray
-    };
-
-    // Node circles - fixed hover issue
-    const circles = node.append('circle')
+    // Node circles
+    nodeGroups.append('circle')
         .attr('r', d => radiusScale(d.level))
         .attr('fill', d => colorScale(d.level))
         .attr('stroke', d => masteryColors[d.mastery])
-        .attr('stroke-width', d => ['mastered', 'good', 'learning', 'weak'].includes(d.mastery) ? 4 : 2)
+        .attr('stroke-width', 3)
         .style('cursor', 'pointer');
 
-    // Add hover area (invisible larger circle) to prevent hover loss
-    node.append('circle')
-        .attr('r', d => radiusScale(d.level) + 15)
+    // Hover areas
+    nodeGroups.append('circle')
+        .attr('r', d => radiusScale(d.level) + 20)
         .attr('fill', 'transparent')
         .style('cursor', 'pointer')
         .on('mouseenter', function(event, d) {
-            const parentNode = d3.select(this.parentNode);
-            // Highlight the visible circle
-            parentNode.select('circle:first-child')
-                .transition()
-                .duration(200)
-                .attr('stroke-width', ['mastered', 'good', 'learning', 'weak'].includes(d.mastery) ? 6 : 4)
-                .attr('r', radiusScale(d.level) + 3);
+            d3.select(this.parentNode).select('circle:first-child')
+                .attr('stroke-width', 5)
+                .attr('r', radiusScale(d.level) + 5);
 
-            showTooltip(event, d);
+            const tooltip = document.getElementById('mindMapTooltip');
+            if (tooltip) {
+                const h4 = tooltip.querySelector('h4');
+                const p = tooltip.querySelector('p');
+                if (h4) h4.textContent = d.topic;
+                if (p) p.textContent = d.content;
+
+                tooltip.style.left = (event.pageX + 20) + 'px';
+                tooltip.style.top = (event.pageY - 30) + 'px';
+                tooltip.style.opacity = '1';
+                tooltip.style.visibility = 'visible';
+                tooltip.style.pointerEvents = 'none';
+            }
         })
         .on('mouseleave', function(event, d) {
-            const parentNode = d3.select(this.parentNode);
-            // Reset the visible circle
-            parentNode.select('circle:first-child')
-                .transition()
-                .duration(200)
-                .attr('stroke-width', ['mastered', 'good', 'learning', 'weak'].includes(d.mastery) ? 4 : 2)
+            d3.select(this.parentNode).select('circle:first-child')
+                .attr('stroke-width', 3)
                 .attr('r', radiusScale(d.level));
 
-            hideTooltip();
-        })
-        .on('click', (event, d) => {
-            // Pulse animation on click
-            d3.select(event.target.parentNode).select('circle:first-child')
-                .transition()
-                .duration(300)
-                .attr('r', radiusScale(d.level) + 10)
-                .transition()
-                .duration(300)
-                .attr('r', radiusScale(d.level));
+            const tooltip = document.getElementById('mindMapTooltip');
+            if (tooltip) {
+                tooltip.style.opacity = '0';
+                tooltip.style.visibility = 'hidden';
+            }
         });
 
-    // Node labels (abbreviated and wrapped)
-    node.each(function(d) {
-        const textGroup = d3.select(this);
-        let topic = d.topic;
-
-        // Truncate long text intelligently
-        if (topic.length > 30) {
-            topic = topic.substring(0, 27) + '...';
+    // Node labels
+    nodeGroups.each(function(d) {
+        const g = d3.select(this);
+        let text = d.topic;
+        if (text.length > 20) {
+            text = text.substring(0, 17) + '...';
         }
 
-        // Split into words for wrapping
-        const words = topic.split(' ');
-        const maxWordsPerLine = 3;
-        const lines = [];
-
-        for (let i = 0; i < words.length; i += maxWordsPerLine) {
-            lines.push(words.slice(i, i + maxWordsPerLine).join(' '));
-        }
-
-        // Add text lines
-        const radius = radiusScale(d.level);
-        const startY = radius + 15;
-        const lineHeight = 12;
-
-        lines.forEach((line, i) => {
-            textGroup.append('text')
-                .text(line)
-                .attr('text-anchor', 'middle')
-                .attr('dy', startY + (i * lineHeight))
-                .attr('font-size', '10px')
-                .attr('fill', '#e8eaed')
-                .attr('font-weight', '500')
-                .style('pointer-events', 'none')
-                .style('user-select', 'none');
-        });
+        g.append('text')
+            .text(text)
+            .attr('text-anchor', 'middle')
+            .attr('dy', radiusScale(d.level) + 20)
+            .attr('font-size', '12px')
+            .attr('fill', '#e8eaed')
+            .attr('font-weight', '600')
+            .style('pointer-events', 'none')
+            .style('user-select', 'none');
     });
-
-    // Update positions on tick with curved links
-    mindMapSimulation.on('tick', () => {
-        link.attr('d', d => {
-            const dx = d.target.x - d.source.x;
-            const dy = d.target.y - d.source.y;
-            const dr = Math.sqrt(dx * dx + dy * dy);
-
-            // Add slight curve to prevent overlap (curve amount based on distance)
-            const curve = dr * 0.15;
-
-            // Calculate control point for quadratic curve
-            const midX = (d.source.x + d.target.x) / 2;
-            const midY = (d.source.y + d.target.y) / 2;
-
-            // Perpendicular offset for curve
-            const offsetX = -dy / dr * curve;
-            const offsetY = dx / dr * curve;
-
-            return `M${d.source.x},${d.source.y} Q${midX + offsetX},${midY + offsetY} ${d.target.x},${d.target.y}`;
-        });
-
-        node
-            .attr('transform', d => `translate(${d.x},${d.y})`);
-    });
-
-    // Tooltip functions
-    function showTooltip(event, d) {
-        const tooltip = document.getElementById('mindMapTooltip');
-        if (!tooltip) return;
-
-        const masteryLabels = {
-            'mastered': '✓ Mastered',
-            'good': '👍 Good',
-            'learning': '📚 Learning',
-            'weak': '⚠️ Needs Review',
-            'none': '○ Not studied'
-        };
-        const masteryColors = {
-            'mastered': '#10b981',
-            'good': '#3b82f6',
-            'learning': '#f59e0b',
-            'weak': '#ef4444',
-            'none': '#6b7280'
-        };
-
-        const h4 = tooltip.querySelector('h4');
-        const p = tooltip.querySelector('p');
-
-        if (h4) h4.textContent = d.topic;
-        if (p) {
-            p.innerHTML = d.content +
-                `<br><br><span style="color: ${masteryColors[d.mastery]}; font-weight: 600; font-size: 0.9em;">${masteryLabels[d.mastery]}</span>`;
-        }
-
-        // Position tooltip carefully to avoid covering nodes
-        const xOffset = event.pageX + 20;
-        const yOffset = event.pageY - 30;
-
-        tooltip.style.left = xOffset + 'px';
-        tooltip.style.top = yOffset + 'px';
-        tooltip.style.opacity = '1';
-        tooltip.style.visibility = 'visible';
-        tooltip.style.zIndex = '9999';
-        tooltip.style.pointerEvents = 'none';  // Critical: tooltip shouldn't capture mouse events
-    }
-
-    function hideTooltip() {
-        const tooltip = document.getElementById('mindMapTooltip');
-        if (!tooltip) return;
-
-        tooltip.style.opacity = '0';
-        tooltip.style.visibility = 'hidden';
-    }
-
-    // Drag behavior
-    function drag(simulation) {
-        function dragstarted(event) {
-            if (!event.active) simulation.alphaTarget(0.3).restart();
-            event.subject.fx = event.subject.x;
-            event.subject.fy = event.subject.y;
-        }
-
-        function dragged(event) {
-            event.subject.fx = event.x;
-            event.subject.fy = event.y;
-        }
-
-        function dragended(event) {
-            if (!event.active) simulation.alphaTarget(0);
-            event.subject.fx = null;
-            event.subject.fy = null;
-        }
-
-        return d3.drag()
-            .on('start', dragstarted)
-            .on('drag', dragged)
-            .on('end', dragended);
-    }
 }
 
 // Initialize on load
