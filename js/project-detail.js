@@ -93,12 +93,6 @@ function setupProjectDetailEventListeners() {
         addNoteFileBtn.addEventListener('click', createNewNoteFile);
     }
 
-    // Save current note button
-    const saveCurrentNoteBtn = document.getElementById('saveCurrentNoteBtn');
-    if (saveCurrentNoteBtn) {
-        saveCurrentNoteBtn.addEventListener('click', saveCurrentNoteFile);
-    }
-
     // Select all notes button
     const selectAllNotesBtn = document.getElementById('selectAllNotesBtn');
     if (selectAllNotesBtn) {
@@ -2619,12 +2613,20 @@ function initStudyMode() {
     const nextBtn = document.getElementById('studyModeNext');
     const restartBtn = document.getElementById('restartStudyModeBtn');
     const closeBtn = document.getElementById('closeStudyModeBtn');
+    const exitBtn = document.getElementById('exitStudyModeBtn');
 
     startBtn?.addEventListener('click', startStudyMode);
     prevBtn?.addEventListener('click', () => navigateStudyMode(-1));
     nextBtn?.addEventListener('click', () => navigateStudyMode(1));
     restartBtn?.addEventListener('click', startStudyMode);
     closeBtn?.addEventListener('click', closeStudyMode);
+
+    if (exitBtn) {
+        exitBtn.addEventListener('click', () => {
+            console.log('Exit button clicked');
+            closeStudyMode();
+        });
+    }
 
     // Mastery buttons
     document.addEventListener('click', (e) => {
@@ -2710,6 +2712,7 @@ function startStudyMode() {
     document.getElementById('studyModeTitle').textContent = `Study Session - ${currentProject.name}`;
     document.getElementById('studyModeCard').classList.remove('hidden');
     document.getElementById('studyModeComplete').classList.add('hidden');
+    document.getElementById('studyModeControls').classList.remove('hidden');
 
     // Display first card
     displayStudyCard();
@@ -2780,6 +2783,7 @@ window.setCurrentProjectForStudy = function(project) {
     currentProject = project;
 };
 window.studyModeState = studyModeState;
+window.displayStudyCard = displayStudyCard;
 
 // Sort cards in hierarchical order (depth-first - branch by branch)
 function sortCardsHierarchically(cards) {
@@ -3002,6 +3006,7 @@ function animateStackCard(card, fromPos, toPos) {
 function showStudyComplete() {
     document.getElementById('studyModeCard').classList.add('hidden');
     document.getElementById('studyModeComplete').classList.remove('hidden');
+    document.getElementById('studyModeControls').classList.add('hidden');
 }
 
 // Set card mastery level
@@ -3028,7 +3033,7 @@ async function setCardMastery(mastery) {
         const { ref, update } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
         const user = window.auth.currentUser;
         if (user && currentProject.id) {
-            const cardRef = ref(window.database, `users/${user.uid}/projects/${currentProject.id}/studyCards/${originalIndex}`);
+            const cardRef = ref(window.db, `users/${user.uid}/projects/${currentProject.id}/studyCards/${originalIndex}`);
             await update(cardRef, {
                 mastery: mastery,
                 lastStudied: new Date().toISOString()

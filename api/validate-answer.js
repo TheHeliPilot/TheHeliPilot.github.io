@@ -2,20 +2,9 @@
 // This prevents users from inspecting client code to see correct answers
 
 export default async function handler(req, res) {
-  // CORS headers - Allow your GitHub Pages domain
-  const allowedOrigins = [
-    'https://thehelipilot.github.io',
-    'http://localhost:5500',
-    'http://localhost:3000',
-    'http://127.0.0.1:5500'
-  ];
-
+  // CORS headers - Allow all origins for development
   const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin) || origin?.includes('localhost')) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  } else {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-  }
+  res.setHeader('Access-Control-Allow-Origin', origin || '*');
 
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');

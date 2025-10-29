@@ -4,19 +4,10 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-// CORS headers
-const allowedOrigins = [
-  'https://thehelipilot.github.io',
-  'http://localhost:5500',
-  'http://localhost:3000',
-  'http://127.0.0.1:5500'
-];
-
 export default async function handler(req, res) {
+  // CORS headers - Allow all origins for development
   const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  }
+  res.setHeader('Access-Control-Allow-Origin', origin || '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 

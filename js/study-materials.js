@@ -368,12 +368,11 @@ function renderStudyCard(card, index, category) {
         <div class="study-card" style="
             padding: 1.5rem;
             background: var(--surface);
-            border-left: 4px solid ${colors[category]};
             border-radius: var(--radius-md);
-            box-shadow: var(--shadow-sm);
+            box-shadow: inset 0 0 30px ${colors[category]}15, var(--shadow-sm);
             transition: transform 0.2s, box-shadow 0.2s;
-        " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='var(--shadow-lg)'"
-           onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='var(--shadow-sm)'">
+        " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='inset 0 0 40px ${colors[category]}25, var(--shadow-lg)'"
+           onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='inset 0 0 30px ${colors[category]}15, var(--shadow-sm)'">
             <h4 style="margin: 0 0 1rem 0; color: ${colors[category]}; display: flex; align-items: center; gap: 0.5rem;">
                 <span style="
                     display: inline-block;
@@ -429,17 +428,17 @@ function renderMindMap() {
     });
 
     const levels = Object.keys(levelGroups).map(Number).sort((a, b) => a - b);
-    const levelSpacing = Math.min(150, height / (levels.length + 1));
+    const levelSpacing = Math.min(200, width / (levels.length + 1));
 
-    // Position nodes in simple tree layout
+    // Position nodes in horizontal tree layout (left-to-right)
     const nodes = [];
     levels.forEach((level, levelIdx) => {
         const cardsInLevel = levelGroups[level];
-        const spacing = width / (cardsInLevel.length + 1);
-        const y = levelSpacing * (levelIdx + 1);
+        const spacing = height / (cardsInLevel.length + 1);
+        const x = levelSpacing * (levelIdx + 1);
 
         cardsInLevel.forEach((card, idx) => {
-            const x = spacing * (idx + 1);
+            const y = spacing * (idx + 1);
             nodes.push({
                 id: card.index,
                 x: x,
@@ -501,22 +500,56 @@ function renderMindMap() {
         .join('g')
         .attr('transform', d => `translate(${d.x},${d.y})`);
 
-    // Node circles
+    // Background circle for mastery color tint
+    nodeGroups.append('circle')
+        .attr('r', d => radiusScale(d.level) + 8)
+        .attr('fill', d => masteryColors[d.mastery])
+        .attr('opacity', 0.25)
+        .style('cursor', 'pointer');
+
+    // Main node circle with level color
     nodeGroups.append('circle')
         .attr('r', d => radiusScale(d.level))
         .attr('fill', d => colorScale(d.level))
-        .attr('stroke', d => masteryColors[d.mastery])
-        .attr('stroke-width', 3)
+        .attr('stroke', 'none')
         .style('cursor', 'pointer');
 
-    // Hover areas
+    // Hover areas with click handler
     nodeGroups.append('circle')
         .attr('r', d => radiusScale(d.level) + 20)
         .attr('fill', 'transparent')
         .style('cursor', 'pointer')
+        .on('click', function(event, d) {
+            // Navigate to study mode and show the clicked card
+            if (currentViewingProject && typeof window.setCurrentProjectForStudy === 'function' && typeof window.startStudyMode === 'function') {
+                window.setCurrentProjectForStudy(currentViewingProject);
+
+                // Set return page to study materials viewer
+                if (window.studyModeState) {
+                    window.studyModeState.returnToPage = 'studyMaterialsPage';
+                }
+
+                // Start study mode
+                window.startStudyMode();
+
+                // Find the card in the sorted array that matches this node's original index
+                const sortedIndex = window.studyModeState.cards.findIndex(card => card.originalIndex === d.id);
+                if (sortedIndex !== -1) {
+                    window.studyModeState.currentIndex = sortedIndex;
+                    // Re-display the card at the new index
+                    if (typeof window.displayStudyCard === 'function') {
+                        window.displayStudyCard();
+                    }
+                }
+            }
+        })
         .on('mouseenter', function(event, d) {
-            d3.select(this.parentNode).select('circle:first-child')
-                .attr('stroke-width', 5)
+            const circles = d3.select(this.parentNode).selectAll('circle');
+            // Enlarge both background and main circle
+            circles.filter((_, i) => i === 0)
+                .attr('r', radiusScale(d.level) + 12)
+                .attr('opacity', 0.4);
+            circles.filter((_, i) => i === 1)
                 .attr('r', radiusScale(d.level) + 5);
 
             const tooltip = document.getElementById('mindMapTooltip');
@@ -534,8 +567,12 @@ function renderMindMap() {
             }
         })
         .on('mouseleave', function(event, d) {
-            d3.select(this.parentNode).select('circle:first-child')
-                .attr('stroke-width', 3)
+            const circles = d3.select(this.parentNode).selectAll('circle');
+            // Reset both circles
+            circles.filter((_, i) => i === 0)
+                .attr('r', radiusScale(d.level) + 8)
+                .attr('opacity', 0.25);
+            circles.filter((_, i) => i === 1)
                 .attr('r', radiusScale(d.level));
 
             const tooltip = document.getElementById('mindMapTooltip');
@@ -545,7 +582,7 @@ function renderMindMap() {
             }
         });
 
-    // Node labels
+    // Node labels (positioned to the right of nodes for horizontal layout)
     nodeGroups.each(function(d) {
         const g = d3.select(this);
         let text = d.topic;
@@ -555,8 +592,9 @@ function renderMindMap() {
 
         g.append('text')
             .text(text)
-            .attr('text-anchor', 'middle')
-            .attr('dy', radiusScale(d.level) + 20)
+            .attr('text-anchor', 'start')
+            .attr('dx', radiusScale(d.level) + 12)
+            .attr('dy', '0.35em')
             .attr('font-size', '12px')
             .attr('fill', '#e8eaed')
             .attr('font-weight', '600')
