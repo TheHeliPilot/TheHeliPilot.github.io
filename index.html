@@ -1675,6 +1675,45 @@
         </div>
     </div>
 
+    <!-- Generation Progress Modal -->
+    <div id="generationProgressModal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-magic"></i> Generating Cards</h3>
+            </div>
+            <div class="modal-body">
+                <!-- Progress Bar -->
+                <div style="margin-bottom: 1.5rem;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                        <span id="generationProgressStatus" style="font-weight: 500; color: var(--text);">Initializing...</span>
+                        <span id="generationProgressPercent" style="font-weight: 600; color: var(--primary);">0%</span>
+                    </div>
+                    <div style="height: 8px; background: var(--surface-light); border-radius: 4px; overflow: hidden;">
+                        <div id="generationProgressBar" style="height: 100%; background: linear-gradient(90deg, var(--primary), var(--secondary)); width: 0%; transition: width 0.3s ease;"></div>
+                    </div>
+                </div>
+
+                <!-- Status Log -->
+                <div id="generationStatusLog" style="max-height: 300px; overflow-y: auto; padding: 1rem; background: var(--surface-light); border-radius: var(--radius-md); font-family: 'Courier New', monospace; font-size: 0.875rem; color: var(--text-secondary);">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <i class="fas fa-spinner fa-spin" style="color: var(--primary);"></i>
+                        <span>Starting generation...</span>
+                    </div>
+                </div>
+
+                <!-- Cache Notice -->
+                <div id="cacheNotice" class="hidden" style="margin-top: 1rem; padding: 0.75rem; background: rgba(29, 185, 84, 0.1); border: 1px solid var(--success); border-radius: var(--radius-md); display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fas fa-bolt" style="color: var(--success);"></i>
+                    <span style="color: var(--success); font-size: 0.875rem;">Loaded from cache! Lightning fast ⚡</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="closeProgressModal" class="btn btn-secondary hidden">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Chart.js for Analytics -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
@@ -1683,6 +1722,7 @@
 
     <!-- Firebase SDKs -->
     <script type="module" src="js/firebase-init.js"></script>
+    <script src="js/generation-optimizer.js"></script>
     <script type="module" src="js/project-detail.js"></script>
     <script type="module" src="js/app.js"></script>
     <script type="module" src="js/study-materials.js"></script>

@@ -612,11 +612,7 @@ async function createNewNoteFile() {
 
 // Render note files list (as file browser cards)
 function renderNoteFilesList() {
-    console.log('renderNoteFilesList called');
     const container = document.getElementById('noteFilesList');
-    console.log('Container:', container);
-    console.log('Current project:', currentProject);
-    console.log('Note files:', currentProject?.noteFiles);
 
     if (!currentProject || !currentProject.noteFiles || currentProject.noteFiles.length === 0) {
         container.innerHTML = `
@@ -713,13 +709,10 @@ function renderNoteFilesList() {
 
         // Click handler to open fullscreen editor
         card.addEventListener('click', (e) => {
-            console.log('Card clicked!', e.target);
             // Don't open if clicking on checkbox or delete button
             if (e.target.type === 'checkbox' || e.target.closest('.note-card-delete-btn')) {
-                console.log('Clicked on checkbox or delete button, ignoring');
                 return;
             }
-            console.log('Opening fullscreen editor for fileId:', fileId);
             openNoteFileFullscreen(fileId);
         });
 
@@ -765,20 +758,13 @@ function renderNoteFilesList() {
 
 // Open note file in fullscreen editor
 function openNoteFileFullscreen(fileId) {
-    console.log('openNoteFileFullscreen called with fileId:', fileId);
-    console.log('currentProject:', currentProject);
-    console.log('currentProject.noteFiles:', currentProject?.noteFiles);
-
     if (!currentProject || !currentProject.noteFiles) {
-        console.error('No current project or note files');
         return;
     }
 
     const file = currentProject.noteFiles.find(f => f.id === fileId);
-    console.log('Found file:', file);
 
     if (!file) {
-        console.error('File not found with id:', fileId);
         return;
     }
 
@@ -786,15 +772,12 @@ function openNoteFileFullscreen(fileId) {
 
     // Show fullscreen editor
     const editorPage = document.getElementById('fullscreenNoteEditor');
-    console.log('Editor page element:', editorPage);
 
     if (!editorPage) {
-        console.error('fullscreenNoteEditor element not found!');
         return;
     }
 
     editorPage.style.display = 'block';
-    console.log('Editor display set to block');
 
     // Load title
     const titleInput = document.getElementById('fullscreenNoteTitle');
@@ -803,12 +786,8 @@ function openNoteFileFullscreen(fileId) {
     }
 
     // Load content into fullscreen editor
-    console.log('fullscreenQuillEditor:', fullscreenQuillEditor);
     if (fullscreenQuillEditor) {
         fullscreenQuillEditor.root.innerHTML = file.content || '';
-        console.log('Content loaded into editor');
-    } else {
-        console.error('fullscreenQuillEditor is not initialized!');
     }
 
     // Update sidebar project name
@@ -992,6 +971,11 @@ async function saveCurrentNoteFileFullscreen() {
         currentNoteFile.content = content;
         currentNoteFile.updatedAt = Date.now();
 
+        // Invalidate cache since notes have changed
+        if (window.generationOptimizer) {
+            await window.generationOptimizer.invalidateCache(currentProject.id, user.uid);
+        }
+
         renderFullscreenSidebarFilesList();
         markNoteAsSavedFullscreen();
     } catch (error) {
@@ -1095,6 +1079,12 @@ async function saveCurrentNoteFile() {
         currentNoteFile.title = title || 'Untitled Note';
         currentNoteFile.content = content;
         currentNoteFile.updatedAt = Date.now();
+
+        // Invalidate cache since notes have changed
+        if (window.generationOptimizer) {
+            const user = window.auth.currentUser;
+            await window.generationOptimizer.invalidateCache(currentProject.id, user.uid);
+        }
 
         renderNoteFilesList();
         markNoteAsSaved();
@@ -1209,6 +1199,11 @@ async function deleteNoteFile(fileId) {
             if (fullscreenEditor && fullscreenEditor.style.display !== 'none') {
                 fullscreenEditor.style.display = 'none';
             }
+        }
+
+        // Invalidate cache since notes have changed
+        if (window.generationOptimizer) {
+            await window.generationOptimizer.invalidateCache(currentProject.id, user.uid);
         }
 
         renderNoteFilesList();
@@ -1379,7 +1374,7 @@ async function retryAPICall(apiCall, maxRetries = 2, timeoutMs = 60000) {
     }
 }
 
-// Regenerate project (test cards and study cards)
+// Regenerate project (test cards and study cards) - OPTIMIZED VERSION
 async function regenerateProject() {
     try {
         if (!window.auth || !window.auth.currentUser || !currentProject) {
@@ -1395,16 +1390,9 @@ async function regenerateProject() {
             return;
         }
 
-        // Combine all selected note files
-        const notesText = selectedNotes.map(note => {
-            // Convert HTML to plain text
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = note.content || '';
-            const plainText = tempDiv.textContent || tempDiv.innerText || '';
-            return `# ${note.title}\n\n${plainText}`;
-        }).join('\n\n---\n\n');
-
-        if (!notesText || notesText.trim().length < 50) {
+        // Basic validation
+        const totalLength = selectedNotes.reduce((sum, note) => sum + (note.content || '').length, 0);
+        if (totalLength < 50) {
             showNotification('Please add more content to your selected notes (at least 50 characters)', 'error');
             return;
         }
@@ -1419,13 +1407,6 @@ async function regenerateProject() {
             return;
         }
 
-        // Warn if text is very long
-        if (notesText.length > 15000) {
-            if (!confirm('Your notes are quite long (' + Math.round(notesText.length / 1000) + 'k characters). This may take longer to process. Continue?')) {
-                return;
-            }
-        }
-
         // Check if user is Pro or Dev
         const isPro = window.isProUser || false;
         const isDev = window.isDevUser || false;
@@ -1435,17 +1416,6 @@ async function regenerateProject() {
             showNotification('Regenerate Project is a Pro/Dev feature. Contact support to upgrade.', 'error');
             return;
         }
-
-        // Show loading
-        const regenerateBtn = document.getElementById('regenerateProjectBtn');
-        const originalText = regenerateBtn.innerHTML;
-        regenerateBtn.disabled = true;
-        regenerateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating study cards...';
-
-        const user = window.auth.currentUser;
-        // Try gpt-4o-mini first as it's more stable, fallback to gpt-5-nano
-        const model = 'gpt-4o-mini';
-        const quizCount = 20; // Reduced from 30 to avoid JSON parsing errors
 
         // Get selected language
         const languageSelect = document.getElementById('generationLanguage');
@@ -1463,93 +1433,68 @@ async function regenerateProject() {
         };
         const languageName = languageNames[language] || 'English';
 
-        // Import Firebase functions
-        const { ref, push, update, remove } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
+        // Show progress modal
+        const progressModal = document.getElementById('generationProgressModal');
+        const statusLog = document.getElementById('generationStatusLog');
+        const cacheNotice = document.getElementById('cacheNotice');
+        progressModal.classList.remove('hidden');
+        cacheNotice.classList.add('hidden');
+        statusLog.innerHTML = '<div><i class="fas fa-spinner fa-spin" style="color: var(--primary);"></i> Starting generation...</div>';
 
-        // Step 1: Generate study cards (with retry)
-        const studyCardsPayload = {
+        // Disable regenerate button
+        const regenerateBtn = document.getElementById('regenerateProjectBtn');
+        const originalText = regenerateBtn.innerHTML;
+        regenerateBtn.disabled = true;
+
+        const user = window.auth.currentUser;
+        const model = 'gpt-4o-mini';
+
+        // Set up progress callback
+        window.generationOptimizer.setProgressCallback((message, percent) => {
+            // Update progress bar
+            document.getElementById('generationProgressStatus').textContent = message;
+            document.getElementById('generationProgressPercent').textContent = `${Math.round(percent)}%`;
+            document.getElementById('generationProgressBar').style.width = `${percent}%`;
+
+            // Add to status log
+            const logEntry = document.createElement('div');
+            logEntry.style.marginTop = '0.5rem';
+            logEntry.innerHTML = `<i class="fas fa-check" style="color: var(--success);"></i> ${message}`;
+            statusLog.appendChild(logEntry);
+            statusLog.scrollTop = statusLog.scrollHeight;
+        });
+
+        // OPTIMIZED GENERATION
+        const generatedData = await window.generationOptimizer.generateOptimized(selectedNotes, {
             userId: user.uid,
             isPro: isPro || isDev || isAdmin,
-            text: notesText,
             model: model,
             language: language,
             languageInstruction: `Generate all content in ${languageName}. Questions, answers, explanations, and all text should be in ${languageName}.`
-        };
-        console.log('Sending study cards request:', studyCardsPayload);
+        });
 
-        const generatedData = await retryAPICall(async () => {
-            // Create abort controller for fetch timeout
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout for fetch itself (AI generation takes time)
+        // Show cache notice if loaded from cache
+        if (generatedData.fromCache) {
+            cacheNotice.classList.remove('hidden');
+        }
 
-            try {
-                const response = await fetch('https://quizapp2-eight.vercel.app/api/generate-study-cards', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(studyCardsPayload),
-                    signal: controller.signal
-                });
+        // Import Firebase functions
+        const { ref, push, update, remove } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
 
-                clearTimeout(timeoutId);
-
-                if (!response.ok) {
-                    let errorMessage = 'Failed to generate cards';
-                    try {
-                        const error = await response.json();
-                        console.error('Generation API error:', error);
-                        errorMessage = error.error || error.message || `Server error (${response.status})`;
-                    } catch (e) {
-                        console.error('Could not parse error response:', e);
-                        errorMessage = `Server error (${response.status})`;
-                    }
-                    throw new Error(errorMessage);
-                }
-
-                const data = await response.json();
-                console.log('Cards generated:', data);
-                return data;
-            } catch (error) {
-                clearTimeout(timeoutId);
-                console.error('Fetch error details:', {
-                    name: error.name,
-                    message: error.message,
-                    stack: error.stack
-                });
-
-                if (error.name === 'AbortError') {
-                    throw new Error('Request timeout - API took too long to respond (60s exceeded)');
-                }
-
-                // For other errors, preserve the original error message
-                if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-                    throw new Error(`Network error: Cannot reach API server. Check if:\n- You have internet connection\n- The API server is running\n- CORS is configured correctly\n\nOriginal error: ${error.message}`);
-                }
-
-                throw error;
-            }
-        }, 2, 90000); // 2 retries, 90 second overall timeout
-
-        // Step 2: Delete old cards before saving new ones
-        regenerateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting old cards...';
-
-        // Delete all unlocked test cards for this project
+        // Delete old cards
+        window.generationOptimizer.updateProgress('Deleting old cards...', 70);
         if (window.cards) {
             const projectCards = window.cards.filter(c => c.projectId === currentProject.id);
-            console.log('Found project cards:', projectCards);
-
             for (const card of projectCards) {
-                // Only delete if not locked
                 if (!card.locked) {
                     const cardRef = ref(window.db, `users/${user.uid}/cards/${card.id}`);
                     await remove(cardRef);
-                    console.log('Deleted unlocked card:', card.id);
                 }
             }
         }
 
-        // Step 3: Save new test cards (linked to study cards)
-        regenerateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving new test cards...';
-
+        // Save new test cards
+        window.generationOptimizer.updateProgress('Saving test cards...', 80);
         const cardsRef = ref(window.db, `users/${user.uid}/cards`);
         for (const card of generatedData.testCards) {
             const cardData = {
@@ -1568,6 +1513,7 @@ async function regenerateProject() {
         }
 
         // Save study cards to project
+        window.generationOptimizer.updateProgress('Saving to database...', 90);
         const projectRef = ref(window.db, `users/${user.uid}/projects/${currentProject.id}`);
         await update(projectRef, {
             studyCards: generatedData.studyCards,
@@ -1596,11 +1542,20 @@ async function regenerateProject() {
         }
 
         // Success!
-        showNotification(`Generated ${generatedData.studyCardCount} study cards and ${generatedData.testCardCount} test cards!`, 'success');
+        window.generationOptimizer.updateProgress('Complete!', 100);
+
+        const successMessage = generatedData.fromCache
+            ? `Loaded ${generatedData.studyCardCount} study cards and ${generatedData.testCardCount} test cards from cache! ⚡`
+            : `Generated ${generatedData.studyCardCount} study cards and ${generatedData.testCardCount} test cards in ${generatedData.duration.toFixed(1)}s! ${generatedData.chunksProcessed > 1 ? `(${generatedData.chunksProcessed} chunks processed in parallel)` : ''}`;
+
+        showNotification(successMessage, 'success');
 
         // Reload the cards display
         loadTestCards(currentProject.id);
         loadStudyCards(currentProject.id);
+
+        // Show close button
+        document.getElementById('closeProgressModal').classList.remove('hidden');
 
         regenerateBtn.disabled = false;
         regenerateBtn.innerHTML = originalText;
@@ -1609,6 +1564,10 @@ async function regenerateProject() {
         console.error('Error regenerating project:', error);
         showNotification('Failed to regenerate project: ' + error.message, 'error');
 
+        // Hide progress modal
+        const progressModal = document.getElementById('generationProgressModal');
+        progressModal.classList.add('hidden');
+
         const regenerateBtn = document.getElementById('regenerateProjectBtn');
         if (regenerateBtn) {
             regenerateBtn.disabled = false;
@@ -1616,6 +1575,16 @@ async function regenerateProject() {
         }
     }
 }
+
+// Close progress modal
+document.addEventListener('DOMContentLoaded', () => {
+    const closeBtn = document.getElementById('closeProgressModal');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            document.getElementById('generationProgressModal').classList.add('hidden');
+        });
+    }
+});
 
 // Load test cards
 function loadTestCards(projectId) {
