@@ -5,6 +5,7 @@ let currentProject = null;
 let currentNoteFile = null;  // Currently open note file
 let autoSaveTimeout = null;
 let sidebarCollapsed = false;
+let noteSortOrder = 'date';  // Default sort: by date (newest first)
 
 // Initialize the project detail page
 export function initProjectDetailPage() {
@@ -206,6 +207,15 @@ function setupProjectDetailEventListeners() {
     const selectAllNotesSidebarBtn = document.getElementById('selectAllNotesSidebarBtn');
     if (selectAllNotesSidebarBtn) {
         selectAllNotesSidebarBtn.addEventListener('click', toggleSelectAllNotes);
+    }
+
+    // Note sort select
+    const noteSortSelect = document.getElementById('noteSortSelect');
+    if (noteSortSelect) {
+        noteSortSelect.addEventListener('change', (e) => {
+            noteSortOrder = e.target.value;
+            renderNoteFilesList();
+        });
     }
 
     // Initialize study mode
@@ -610,9 +620,38 @@ async function createNewNoteFile() {
     }
 }
 
+// Sort note files based on current sort order
+function sortNoteFiles(files) {
+    const sorted = [...files]; // Create a copy to avoid mutating original
+
+    switch (noteSortOrder) {
+        case 'date': // Newest first (default)
+            return sorted.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+        case 'date-asc': // Oldest first
+            return sorted.sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0));
+
+        case 'alpha': // A → Z
+            return sorted.sort((a, b) => a.title.localeCompare(b.title));
+
+        case 'alpha-desc': // Z → A
+            return sorted.sort((a, b) => b.title.localeCompare(a.title));
+
+        case 'size': // Largest first
+            return sorted.sort((a, b) => (b.content || '').length - (a.content || '').length);
+
+        case 'size-asc': // Smallest first
+            return sorted.sort((a, b) => (a.content || '').length - (b.content || '').length);
+
+        default:
+            return sorted;
+    }
+}
+
 // Render note files list (as file browser cards)
 function renderNoteFilesList() {
     const container = document.getElementById('noteFilesList');
+    const noteCountDisplay = document.getElementById('noteCountDisplay');
 
     if (!currentProject || !currentProject.noteFiles || currentProject.noteFiles.length === 0) {
         container.innerHTML = `
@@ -621,10 +660,22 @@ function renderNoteFilesList() {
                 <p style="color: var(--text-muted); font-size: 0.875rem; margin: 0;">No note files yet.<br>Click "New Note File" to create one.</p>
             </div>
         `;
+        if (noteCountDisplay) {
+            noteCountDisplay.textContent = '0 notes';
+        }
         return;
     }
 
-    container.innerHTML = currentProject.noteFiles.map(file => {
+    // Update note count
+    const selectedCount = currentProject.noteFiles.filter(f => f.selected).length;
+    if (noteCountDisplay) {
+        noteCountDisplay.innerHTML = `${currentProject.noteFiles.length} ${currentProject.noteFiles.length === 1 ? 'note' : 'notes'} <span style="color: var(--success);">• ${selectedCount} selected</span>`;
+    }
+
+    // Sort files
+    const sortedFiles = sortNoteFiles(currentProject.noteFiles);
+
+    container.innerHTML = sortedFiles.map(file => {
         const isActive = currentNoteFile && currentNoteFile.id === file.id;
         // Get content preview
         const tempDiv = document.createElement('div');
@@ -643,11 +694,14 @@ function renderNoteFilesList() {
                     min-height: 200px;
                     display: flex;
                     flex-direction: column;">
-            <!-- Checkbox -->
+            <!-- Custom Checkbox -->
             <div style="position: absolute; top: 1rem; left: 1rem;">
-                <input type="checkbox" class="note-file-checkbox" ${file.selected ? 'checked' : ''}
-                       style="cursor: pointer; width: 18px; height: 18px; accent-color: var(--primary);"
-                       title="${file.selected ? 'Included in generation' : 'Excluded from generation'}">
+                <label class="custom-checkbox-container" title="${file.selected ? 'Included in generation' : 'Excluded from generation'}">
+                    <input type="checkbox" class="note-file-checkbox" ${file.selected ? 'checked' : ''}>
+                    <div class="custom-checkbox">
+                        <i class="fas fa-check custom-checkbox-icon"></i>
+                    </div>
+                </label>
             </div>
 
             <!-- Delete button -->
@@ -821,7 +875,10 @@ function renderFullscreenSidebarFilesList() {
     const container = document.getElementById('sidebarNotesList');
     if (!container || !currentProject || !currentProject.noteFiles) return;
 
-    container.innerHTML = currentProject.noteFiles.map(file => {
+    // Sort files
+    const sortedFiles = sortNoteFiles(currentProject.noteFiles);
+
+    container.innerHTML = sortedFiles.map(file => {
         const isActive = currentNoteFile && currentNoteFile.id === file.id;
         return `
         <div class="sidebar-note-item ${isActive ? 'active' : ''}" data-file-id="${file.id}"
@@ -832,8 +889,12 @@ function renderFullscreenSidebarFilesList() {
                     transition: all 0.2s;
                     margin-bottom: 0.5rem;">
             <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <input type="checkbox" class="sidebar-file-checkbox" ${file.selected ? 'checked' : ''}
-                       style="cursor: pointer; width: 16px; height: 16px; accent-color: ${isActive ? '#fff' : 'var(--primary)'};">
+                <label class="custom-checkbox-container" style="width: 20px; height: 20px;" onclick="event.stopPropagation()">
+                    <input type="checkbox" class="sidebar-file-checkbox" ${file.selected ? 'checked' : ''} style="width: 20px; height: 20px;">
+                    <div class="custom-checkbox" style="width: 20px; height: 20px; border-radius: 4px; ${isActive ? 'border-color: rgba(255,255,255,0.5);' : ''}">
+                        <i class="fas fa-check custom-checkbox-icon" style="font-size: 11px;"></i>
+                    </div>
+                </label>
                 <div style="flex: 1; min-width: 0;">
                     <div style="font-size: 0.875rem; font-weight: 500;
                                 color: ${isActive ? '#fff' : 'var(--text)'};

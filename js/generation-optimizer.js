@@ -392,7 +392,10 @@ class GenerationOptimizer {
         const hashArray = Array.from(new Uint8Array(hashBuffer));
         const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 
-        return `gen_v${this.cacheVersion}_${hashHex}`;
+        // Sanitize version for Firebase (replace dots with underscores)
+        const sanitizedVersion = this.cacheVersion.replace(/\./g, '_');
+
+        return `gen_v${sanitizedVersion}_${hashHex}`;
     }
 
     /**
@@ -468,10 +471,13 @@ class GenerationOptimizer {
      */
     async invalidateCache(projectId, userId) {
         // Clear all cache entries that start with gen_v prefix in localStorage
+        const sanitizedVersion = this.cacheVersion.replace(/\./g, '_');
+        const cachePrefix = `gen_v${sanitizedVersion}`;
+
         const keysToRemove = [];
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
-            if (key && key.startsWith('gen_v')) {
+            if (key && key.startsWith(cachePrefix)) {
                 keysToRemove.push(key);
             }
         }

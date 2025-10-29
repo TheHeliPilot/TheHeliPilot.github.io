@@ -2853,3 +2853,100 @@ select:hover,
         height: 18px;
     }
 }
+
+/* ============================================================================ */
+/* CUSTOM CHECKBOX STYLING - For Note File Inclusion */
+/* ============================================================================ */
+
+/* Custom checkbox container */
+.custom-checkbox-container {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    cursor: pointer;
+}
+
+/* Hide default checkbox */
+.custom-checkbox-container input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 24px;
+    height: 24px;
+    cursor: pointer;
+    z-index: 2;
+}
+
+/* Custom checkbox appearance */
+.custom-checkbox {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--border);
+    border-radius: 6px;
+    background: var(--background);
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+}
+
+/* Checkmark icon (hidden by default) */
+.custom-checkbox-icon {
+    color: transparent;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+/* Hover state - unchecked */
+.custom-checkbox-container:hover .custom-checkbox {
+    border-color: var(--primary);
+    background: rgba(102, 126, 234, 0.05);
+}
+
+/* Checked state - flat by default */
+.custom-checkbox-container input[type="checkbox"]:checked ~ .custom-checkbox {
+    background: var(--primary);
+    border-color: var(--primary);
+}
+
+.custom-checkbox-container input[type="checkbox"]:checked ~ .custom-checkbox .custom-checkbox-icon {
+    color: white;
+}
+
+/* Hover state - checked (adds shine/elevation) */
+.custom-checkbox-container:hover input[type="checkbox"]:checked ~ .custom-checkbox {
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+/* Active/pressed state */
+.custom-checkbox-container:active .custom-checkbox {
+    transform: scale(0.95);
+}
+
+/* Disabled state */
+.custom-checkbox-container input[type="checkbox"]:disabled ~ .custom-checkbox {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: var(--surface);
+}
+
+/* Focus state for accessibility */
+.custom-checkbox-container input[type="checkbox"]:focus ~ .custom-checkbox {
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+
+/* Checkbox label text */
+.checkbox-label {
+    margin-left: 8px;
+    font-size: 0.875rem;
+    color: var(--text);
+    user-select: none;
+    cursor: pointer;
+}
