@@ -2149,7 +2149,7 @@ function showMindMapColorPicker(event, nodeId) {
     }, 100);
 }
 
-// Render mind map - SIMPLE STATIC VERSION (NO PHYSICS)
+// Render mind map - HORIZONTAL CIRCULAR LAYOUT
 function renderMindMap() {
     const mindMapContainer = document.getElementById('projectMindMapContainer');
     const svgElement = document.getElementById('projectMindMapSvg');
@@ -2174,19 +2174,19 @@ function renderMindMap() {
     updateMindmapAnalytics(project.studyCards);
 
     // Clear previous visualization
-    svgElement.innerHTML = '';
+    d3.select(svgElement).selectAll('*').remove();
 
     const studyCards = project.studyCards;
     const width = mindMapContainer.clientWidth;
     const height = mindMapContainer.clientHeight;
 
-    // Helper to calculate node width
+    console.log('Rendering mindmap with study cards:', studyCards.length);
+
+    // Helper to calculate node width based on text
     const calculateNodeWidth = (name) => {
         const textLength = name.length;
         return Math.max(140, Math.min(textLength * 8.5 + 50, 300));
     };
-
-    console.log('Rendering mindmap with study cards:', studyCards.length);
 
     // Mastery colors
     const masteryColors = {
@@ -2194,189 +2194,91 @@ function renderMindMap() {
         'good': '#48dbfb',
         'learning': '#feca57',
         'weak': '#ff6b6b',
-        'none': '#6b7280'  // Default for unlearnt
+        'none': '#6b7280'
     };
 
-    // Group cards by level for hierarchical layout
+    // Group cards by level for horizontal positioning
     const levelGroups = {};
-    studyCards.forEach((card, index) => {
+    studyCards.forEach((card, i) => {
         const level = card.level || 0;
         if (!levelGroups[level]) levelGroups[level] = [];
-        levelGroups[level].push({ card, index });
+        levelGroups[level].push({ ...card, index: i });
     });
 
     const levels = Object.keys(levelGroups).map(Number).sort((a, b) => a - b);
-    const verticalSpacing = Math.max(120, height / (levels.length + 1.5));
-    const horizontalPadding = 60;
-    const minNodeSpacing = 60;  // Increased gap to prevent overlaps
 
-    // Build nodes with parent-aware positioning
+    // Calculate maximum node width per level to ensure proper spacing
+    const maxWidthPerLevel = {};
+    levels.forEach(level => {
+        const cardsInLevel = levelGroups[level];
+        const widths = cardsInLevel.map(card => {
+            const name = card.topic || card.term || card.name || card.title || `Card ${card.index + 1}`;
+            return calculateNodeWidth(name);
+        });
+        maxWidthPerLevel[level] = Math.max(...widths);
+    });
+
+    // Calculate X positions respecting node widths
+    const levelXPositions = [];
+    let currentX = 100; // Start padding
+    levels.forEach(level => {
+        levelXPositions.push(currentX);
+        currentX += maxWidthPerLevel[level] + 80; // Node width + gap (reduced from 150)
+    });
+
+    // Position nodes in horizontal tree layout (left-to-right)
     const nodes = [];
-    const nodeMap = new Map();
-
-    // First pass: create all nodes with temporary positions
+    const rectHeight = 64; // Node height
     levels.forEach((level, levelIdx) => {
         const cardsInLevel = levelGroups[level];
-        const y = verticalSpacing * (levelIdx + 1);
+        // Ensure nodes don't overlap vertically - minimum spacing is rectHeight + gap
+        const minSpacing = rectHeight + 30; // 64 + 30 = 94px minimum
+        const spacing = Math.max(minSpacing, height / (cardsInLevel.length + 1));
+        const x = levelXPositions[levelIdx];
 
-        cardsInLevel.forEach(({ card, index }) => {
-            const name = card.topic || card.term || card.name || card.title || `Card ${index + 1}`;
+        cardsInLevel.forEach((card, idx) => {
+            const y = spacing * (idx + 1);
+            const name = card.topic || card.term || card.name || card.title || `Card ${idx + 1}`;
             const nodeWidth = calculateNodeWidth(name);
             const mastery = card.mastery || 'none';
             const masteryColor = masteryColors[mastery];
 
-            const node = {
-                id: index,
-                originalIndex: index,
-                type: 'study',
+            nodes.push({
+                id: card.index,
+                x: x,
+                y: y,
                 name: name,
                 definition: card.content || card.definition || card.description || '',
+                topic: card.topic || 'Untitled',
+                content: card.content || '',
                 level: level,
-                color: card.color || '#667eea',
                 mastery: mastery,
                 masteryColor: masteryColor,
-                lastStudied: card.lastStudied,
+                color: card.color || '#667eea',
                 parentIndex: card.parentIndex,
-                width: nodeWidth,
-                x: 0,  // Will be calculated in second pass
-                y: y,
-                children: []
-            };
-
-            nodes.push(node);
-            nodeMap.set(index, node);
+                width: nodeWidth
+            });
         });
     });
 
-    // Build parent-child relationships
-    nodes.forEach(node => {
-        if (node.parentIndex !== null && node.parentIndex !== undefined) {
-            const parent = nodeMap.get(node.parentIndex);
-            if (parent) {
-                parent.children.push(node);
-            }
-        }
-    });
-
-    // Second pass: position nodes level by level, considering parents
-    levels.forEach((level, levelIdx) => {
-        const nodesInLevel = nodes.filter(n => n.level === level);
-
-        if (level === 0) {
-            // Root level: evenly distribute across width
-            const totalCardWidth = nodesInLevel.reduce((sum, n) => sum + n.width, 0);
-            const totalSpacing = minNodeSpacing * Math.max(0, nodesInLevel.length - 1);
-            const totalNeeded = totalCardWidth + totalSpacing;
-            const availableWidth = width - (horizontalPadding * 2);
-
-            // Center the entire level
-            let currentX = horizontalPadding + Math.max(0, (availableWidth - totalNeeded) / 2);
-
-            nodesInLevel.forEach(node => {
-                node.x = currentX + node.width / 2;
-                currentX += node.width + minNodeSpacing;
-            });
-        } else {
-            // Child levels: position under parents, then resolve overlaps
-            const positioned = new Set();
-
-            // First, position all children under their parents
-            nodesInLevel.forEach(node => {
-                if (positioned.has(node.id)) return;
-
-                const parent = nodeMap.get(node.parentIndex);
-                if (parent) {
-                    // Get all siblings (children of same parent at this level)
-                    const siblings = parent.children.filter(c => c.level === level);
-
-                    // Calculate total width of siblings
-                    const totalSiblingWidth = siblings.reduce((sum, s) => sum + s.width, 0);
-                    const totalSiblingSpacing = minNodeSpacing * Math.max(0, siblings.length - 1);
-                    const totalSiblingNeeded = totalSiblingWidth + totalSiblingSpacing;
-
-                    // Center siblings under parent
-                    let siblingX = parent.x - totalSiblingNeeded / 2;
-
-                    siblings.forEach(sibling => {
-                        sibling.x = siblingX + sibling.width / 2;
-                        siblingX += sibling.width + minNodeSpacing;
-                        positioned.add(sibling.id);
-                    });
-                } else {
-                    // No parent - position at center
-                    if (!positioned.has(node.id)) {
-                        node.x = width / 2;
-                        positioned.add(node.id);
-                    }
-                }
-            });
-
-            // Now resolve all overlaps by iterating until no overlaps remain
-            let hasOverlap = true;
-            let iterations = 0;
-            const maxIterations = 10;
-
-            while (hasOverlap && iterations < maxIterations) {
-                hasOverlap = false;
-                iterations++;
-
-                const sortedByX = nodesInLevel.slice().sort((a, b) => a.x - b.x);
-
-                // Check and fix overlaps from left to right
-                for (let i = 1; i < sortedByX.length; i++) {
-                    const prev = sortedByX[i - 1];
-                    const curr = sortedByX[i];
-                    const requiredDistance = (prev.width + curr.width) / 2 + minNodeSpacing;
-                    const actualDistance = curr.x - prev.x;
-
-                    if (actualDistance < requiredDistance) {
-                        hasOverlap = true;
-                        const shift = requiredDistance - actualDistance;
-                        curr.x += shift;
-                    }
-                }
-
-                // Ensure all nodes are within bounds
-                sortedByX.forEach(node => {
-                    const minBound = horizontalPadding + node.width / 2;
-                    const maxBound = width - horizontalPadding - node.width / 2;
-
-                    if (node.x < minBound) {
-                        node.x = minBound;
-                        hasOverlap = true;
-                    } else if (node.x > maxBound) {
-                        node.x = maxBound;
-                        hasOverlap = true;
-                    }
-                });
-            }
-        }
-    });
-
-    console.log('Created nodes:', nodes.length);
-
-    // Build links between study cards (hierarchy only)
+    // Create links
     const links = [];
     studyCards.forEach((card, index) => {
         if (card.parentIndex !== null && card.parentIndex !== undefined && card.parentIndex >= 0) {
-            const sourceNode = nodeMap.get(card.parentIndex);
-            const targetNode = nodeMap.get(index);
+            const sourceNode = nodes.find(n => n.id === card.parentIndex);
+            const targetNode = nodes.find(n => n.id === index);
             if (sourceNode && targetNode) {
                 links.push({
                     source: sourceNode,
-                    target: targetNode,
-                    type: 'hierarchy'
+                    target: targetNode
                 });
             }
         }
     });
-
-    console.log('Created links:', links.length);
 
     // Setup SVG
     const svg = d3.select(svgElement);
     svg.attr('width', width).attr('height', height);
-    svg.selectAll('*').remove();
 
     // Create container for zoom/pan
     const container = svg.append('g');
@@ -2399,8 +2301,8 @@ function renderMindMap() {
         );
     });
 
-    // Draw links (static straight lines)
-    const linkElements = container.append('g')
+    // Draw links
+    container.append('g')
         .selectAll('line')
         .data(links)
         .join('line')
@@ -2425,12 +2327,11 @@ function renderMindMap() {
 
     // Rectangle dimensions
     const getRectWidth = (d) => d.width;
-    const rectHeight = 64;  // Increased height for more padding
-    const accentWidth = 4;  // Slightly thinner accent bar
+    // rectHeight is defined earlier at line 2231
 
-    // Progress glow background for nodes with mastery
+    // Outer glow for mastery (outside the node)
     nodeGroups.append('rect')
-        .attr('class', 'progress-glow')
+        .attr('class', 'mastery-glow')
         .attr('x', d => -getRectWidth(d) / 2 - 10)
         .attr('y', -rectHeight / 2 - 10)
         .attr('width', d => getRectWidth(d) + 20)
@@ -2442,7 +2343,7 @@ function renderMindMap() {
         .style('filter', d => d.masteryColor ? `blur(12px)` : 'none')
         .attr('pointer-events', 'none');
 
-    // Main dark rectangle background
+    // Main rectangle background
     nodeGroups.append('rect')
         .attr('class', 'main-rect')
         .attr('x', d => -getRectWidth(d) / 2)
@@ -2455,30 +2356,31 @@ function renderMindMap() {
         .attr('stroke', d => d.masteryColor || d.color || '#667eea')
         .attr('stroke-width', d => d.masteryColor ? 2.5 : 1.5)
         .attr('stroke-opacity', d => d.masteryColor ? 0.8 : 0.3)
-        .style('filter', d => d.masteryColor ?
-            `drop-shadow(0 0 10px ${d.masteryColor}40) drop-shadow(0 4px 12px rgba(0,0,0,0.4))` :
-            'drop-shadow(0 4px 12px rgba(0,0,0,0.4))')
-        .style('transition', 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)')
+        .style('filter', d => {
+            const outerShadow = d.masteryColor
+                ? `drop-shadow(0 0 10px ${d.masteryColor}40) drop-shadow(0 4px 12px rgba(0,0,0,0.4))`
+                : 'drop-shadow(0 4px 12px rgba(0,0,0,0.4))';
+            return outerShadow;
+        })
         .attr('pointer-events', 'none');
 
-    // Colored accent bar on the left
+    // Inner glow rectangle (for inside glow effect based on node color)
     nodeGroups.append('rect')
-        .attr('class', 'accent-bar')
+        .attr('class', 'inner-glow')
         .attr('x', d => -getRectWidth(d) / 2)
         .attr('y', -rectHeight / 2)
-        .attr('width', accentWidth)
+        .attr('width', d => getRectWidth(d))
         .attr('height', rectHeight)
         .attr('rx', 8)
         .attr('ry', 8)
-        .attr('fill', d => d.color || '#667eea')
-        .attr('opacity', 1)
-        .style('transition', 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)')
+        .attr('fill', d => d.color)
+        .attr('opacity', 0.08)
         .attr('pointer-events', 'none');
 
     // Name label inside rectangle
     nodeGroups.append('text')
         .text(d => d.name)
-        .attr('x', d => -getRectWidth(d) / 2 + accentWidth + 14)
+        .attr('x', d => -getRectWidth(d) / 2 + 14)
         .attr('text-anchor', 'start')
         .attr('dy', -8)
         .attr('fill', '#e8eaed')
@@ -2488,13 +2390,8 @@ function renderMindMap() {
 
     // Level label inside rectangle
     nodeGroups.append('text')
-        .text(d => {
-            if (d.type === 'test') {
-                return `Test (${d.difficulty || 'medium'})`;
-            }
-            return d.level >= 0 ? `Level ${d.level}` : '';
-        })
-        .attr('x', d => -getRectWidth(d) / 2 + accentWidth + 14)
+        .text(d => d.level >= 0 ? `Level ${d.level}` : '')
+        .attr('x', d => -getRectWidth(d) / 2 + 14)
         .attr('text-anchor', 'start')
         .attr('dy', 10)
         .attr('fill', '#9da7b3')
@@ -2515,14 +2412,14 @@ function renderMindMap() {
         .text(d => masteryLabels[d.mastery] || 'Not studied')
         .attr('x', d => getRectWidth(d) / 2 - 10)
         .attr('text-anchor', 'end')
-        .attr('dy', 8)  // Moved down more
+        .attr('dy', 8)
         .attr('fill', d => d.masteryColor)
         .attr('font-size', '10px')
         .attr('font-weight', '600')
         .attr('opacity', 0.85)
         .attr('pointer-events', 'none');
 
-    // Larger invisible hover area
+    // Invisible hover area
     nodeGroups.append('rect')
         .attr('x', d => -getRectWidth(d) / 2 - 12)
         .attr('y', -rectHeight / 2 - 12)
@@ -2535,21 +2432,17 @@ function renderMindMap() {
     nodeGroups.on('mouseenter', function(event, d) {
         const nodeColor = d.color || '#667eea';
 
-        // Main rect
         d3.select(this).select('.main-rect')
             .transition()
             .duration(200)
             .attr('stroke', nodeColor)
             .attr('stroke-width', 3)
-            .attr('stroke-opacity', 0.9)
-            .style('filter', 'drop-shadow(0 6px 20px rgba(0,0,0,0.5))');
+            .attr('stroke-opacity', 0.9);
 
-        // Accent bar
-        d3.select(this).select('.accent-bar')
+        d3.select(this).select('.inner-glow')
             .transition()
             .duration(200)
-            .attr('width', accentWidth + 2)
-            .attr('opacity', 1);
+            .attr('opacity', 0.15);
 
         if (tooltip) {
             tooltip.querySelector('h4').textContent = d.name;
@@ -2566,25 +2459,17 @@ function renderMindMap() {
         }
     })
     .on('mouseleave', function(event, d) {
-        const nodeColor = d.color || '#667eea';
-
-        // Main rect
         d3.select(this).select('.main-rect')
             .transition()
             .duration(200)
-            .attr('stroke', d.masteryColor || nodeColor)
+            .attr('stroke', d.masteryColor || d.color)
             .attr('stroke-width', d.masteryColor ? 2.5 : 1.5)
-            .attr('stroke-opacity', d.masteryColor ? 0.8 : 0.3)
-            .style('filter', d.masteryColor ?
-                `drop-shadow(0 0 10px ${d.masteryColor}40) drop-shadow(0 4px 12px rgba(0,0,0,0.4))` :
-                'drop-shadow(0 4px 12px rgba(0,0,0,0.4))');
+            .attr('stroke-opacity', d.masteryColor ? 0.8 : 0.3);
 
-        // Accent bar
-        d3.select(this).select('.accent-bar')
+        d3.select(this).select('.inner-glow')
             .transition()
             .duration(200)
-            .attr('width', accentWidth)
-            .attr('opacity', 1);
+            .attr('opacity', 0.08);
 
         if (tooltip) {
             tooltip.style.opacity = '0';
@@ -2606,6 +2491,9 @@ let studyModeState = {
     returnToPage: null  // Track where to return after study mode
 };
 
+// Track if study mode listeners are initialized
+let studyModeListenersInitialized = false;
+
 // Initialize Study Mode
 function initStudyMode() {
     const startBtn = document.getElementById('startStudyModeBtn');
@@ -2613,7 +2501,6 @@ function initStudyMode() {
     const nextBtn = document.getElementById('studyModeNext');
     const restartBtn = document.getElementById('restartStudyModeBtn');
     const closeBtn = document.getElementById('closeStudyModeBtn');
-    const exitBtn = document.getElementById('exitStudyModeBtn');
 
     startBtn?.addEventListener('click', startStudyMode);
     prevBtn?.addEventListener('click', () => navigateStudyMode(-1));
@@ -2621,35 +2508,41 @@ function initStudyMode() {
     restartBtn?.addEventListener('click', startStudyMode);
     closeBtn?.addEventListener('click', closeStudyMode);
 
-    if (exitBtn) {
-        exitBtn.addEventListener('click', () => {
-            console.log('Exit button clicked');
-            closeStudyMode();
+    // Only add document-level listeners once
+    if (!studyModeListenersInitialized) {
+        studyModeListenersInitialized = true;
+
+        // Use event delegation for exit button
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'exitStudyModeBtn' || e.target.closest('#exitStudyModeBtn')) {
+                console.log('Exit button clicked');
+                closeStudyMode();
+            }
+        });
+
+        // Mastery buttons
+        document.addEventListener('click', (e) => {
+            const masteryBtn = e.target.closest('.mastery-btn');
+            if (masteryBtn) {
+                const mastery = masteryBtn.dataset.mastery;
+                setCardMastery(mastery);
+            }
+        });
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            const studyModeActive = document.getElementById('studyModeCard')?.classList.contains('hidden') === false;
+            if (!studyModeActive) return;
+
+            if (e.key === 'ArrowLeft') navigateStudyMode(-1);
+            else if (e.key === 'ArrowRight') navigateStudyMode(1);
+            // Number keys for mastery
+            else if (e.key === '1') setCardMastery('weak');
+            else if (e.key === '2') setCardMastery('learning');
+            else if (e.key === '3') setCardMastery('good');
+            else if (e.key === '4') setCardMastery('mastered');
         });
     }
-
-    // Mastery buttons
-    document.addEventListener('click', (e) => {
-        const masteryBtn = e.target.closest('.mastery-btn');
-        if (masteryBtn) {
-            const mastery = masteryBtn.dataset.mastery;
-            setCardMastery(mastery);
-        }
-    });
-
-    // Keyboard navigation
-    document.addEventListener('keydown', (e) => {
-        const studyModeActive = document.getElementById('studyModeCard')?.classList.contains('hidden') === false;
-        if (!studyModeActive) return;
-
-        if (e.key === 'ArrowLeft') navigateStudyMode(-1);
-        else if (e.key === 'ArrowRight') navigateStudyMode(1);
-        // Number keys for mastery
-        else if (e.key === '1') setCardMastery('weak');
-        else if (e.key === '2') setCardMastery('learning');
-        else if (e.key === '3') setCardMastery('good');
-        else if (e.key === '4') setCardMastery('mastered');
-    });
 }
 
 // Close Study Mode
@@ -2659,9 +2552,8 @@ async function closeStudyMode() {
     studyModeState.currentIndex = 0;
     studyModeState.returnToPage = null;
 
-    // Reload project data to get updated mastery
-    if (currentProject && currentProject.id) {
-        await loadProjects();
+    // Reload project data to get updated mastery (using window.projects)
+    if (currentProject && currentProject.id && window.projects) {
         const updatedProject = window.projects.find(p => p.id === currentProject.id);
         if (updatedProject) {
             currentProject = updatedProject;

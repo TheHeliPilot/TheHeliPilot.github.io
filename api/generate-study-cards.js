@@ -69,7 +69,23 @@ Return ONLY a JSON object with this exact structure:
       "correctAnswer": 0,
       "explanation": "Brief explanation of the answer",
       "relatedStudyCard": 0,
+      "difficulty": "easy"
+    },
+    {
+      "question": "How does [concept] relate to [other concept]?",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correctAnswer": 1,
+      "explanation": "Brief explanation of the answer",
+      "relatedStudyCard": 1,
       "difficulty": "medium"
+    },
+    {
+      "question": "Analyze the implications of [complex topic]",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correctAnswer": 2,
+      "explanation": "Brief explanation of the answer",
+      "relatedStudyCard": 2,
+      "difficulty": "hard"
     }
   ]
 }
@@ -101,7 +117,9 @@ TEST CARDS Rules (create exactly ${testCardCount} cards):
 - Question types: multiple choice with 4 options
 - "correctAnswer" is the index (0-3) of the correct option
 - Include "explanation" for why the answer is correct
-- Difficulty levels: "easy", "medium", "hard" (distribute evenly)
+- IMPORTANT: Each card MUST have "difficulty" field set to "easy", "medium", or "hard"
+- Distribute difficulties EVENLY: approximately 1/3 easy, 1/3 medium, 1/3 hard
+- Easy = straightforward recall, Medium = requires understanding, Hard = analysis/application
 - Questions should test understanding, not just memorization
 
 General:
@@ -193,6 +211,9 @@ ${text}`;
       }
       if (card.relatedStudyCard === undefined || card.relatedStudyCard < 0 || card.relatedStudyCard >= result.studyCards.length) {
         return res.status(500).json({ error: `Test card ${i} has invalid relatedStudyCard reference` });
+      }
+      if (!card.difficulty || !['easy', 'medium', 'hard'].includes(card.difficulty)) {
+        return res.status(500).json({ error: `Test card ${i} has invalid or missing difficulty (must be "easy", "medium", or "hard")` });
       }
     }
 
