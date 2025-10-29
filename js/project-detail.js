@@ -3025,9 +3025,10 @@ async function setCardMastery(mastery) {
 
     // Save to Firebase
     try {
-        const user = auth.currentUser;
+        const { ref, update } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
+        const user = window.auth.currentUser;
         if (user && currentProject.id) {
-            const cardRef = ref(database, `users/${user.uid}/projects/${currentProject.id}/studyCards/${originalIndex}`);
+            const cardRef = ref(window.database, `users/${user.uid}/projects/${currentProject.id}/studyCards/${originalIndex}`);
             await update(cardRef, {
                 mastery: mastery,
                 lastStudied: new Date().toISOString()
