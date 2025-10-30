@@ -271,7 +271,7 @@
                 <!-- Notes Tab -->
                 <div id="notesTab" class="project-tab-content active">
                     <div class="notes-toolbar">
-                        <div style="display: flex; gap: var(--spacing-md); align-items: center;">
+                        <div class="notes-toolbar-left">
                             <button id="addNoteFileBtn" class="btn btn-primary">
                                 <i class="fas fa-file-plus"></i>
                                 New Note File
@@ -288,13 +288,13 @@
                                 <option value="ru">Russian</option>
                             </select>
                         </div>
-                        <div style="display: flex; gap: var(--spacing-md); margin-left: auto; align-items: center;">
+                        <div class="notes-toolbar-right">
                             <input type="file" id="importNotesFile" accept=".pdf,.docx,.txt,.md" style="display: none;">
                             <button id="importNotesBtn" class="btn btn-secondary">
                                 <i class="fas fa-file-import"></i>
                                 Import File
                             </button>
-                            <button id="cleanNotesBtn" class="btn btn-secondary">
+                            <button id="cleanNotesBtn" class="btn btn-secondary" title="Use AI to clean, format, and organize your notes">
                                 <i class="fas fa-wand-magic-sparkles"></i>
                                 AI Clean
                             </button>
@@ -308,11 +308,11 @@
                     <!-- Notes Layout: File Browser -->
                     <div id="notesBrowser" style="padding: 1rem;">
                         <!-- Sorting Controls -->
-                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border);">
-                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <div class="notes-sort-header">
+                            <div class="notes-sort-controls">
                                 <i class="fas fa-sort" style="color: var(--text-muted);"></i>
                                 <span style="color: var(--text-muted); font-size: 0.875rem; font-weight: 500;">Sort by:</span>
-                                <select id="noteSortSelect" class="text-input" style="width: auto; padding: 0.375rem 0.75rem; font-size: 0.875rem; border: 1px solid var(--border); border-radius: var(--radius-md);">
+                                <select id="noteSortSelect" class="text-input notes-sort-select">
                                     <option value="date">Last Modified</option>
                                     <option value="date-asc">Oldest First</option>
                                     <option value="alpha">A → Z</option>
@@ -321,7 +321,7 @@
                                     <option value="size-asc">Size (Smallest)</option>
                                 </select>
                             </div>
-                            <div style="color: var(--text-muted); font-size: 0.875rem;">
+                            <div class="notes-count">
                                 <span id="noteCountDisplay">0 notes</span>
                             </div>
                         </div>
