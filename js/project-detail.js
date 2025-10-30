@@ -1509,11 +1509,14 @@ async function regenerateProject() {
             : `This will regenerate cards from ${selectedCount} selected note files. Continue?`;
 
         const confirmed = await new Promise((resolve) => {
-            let hasResponded = false;
+            // Set cancel callback
+            window.confirmCancelCallback = () => {
+                resolve(false);
+            };
+
             window.showConfirm(
                 message,
                 () => {
-                    hasResponded = true;
                     resolve(true);
                 },
                 {
@@ -1523,10 +1526,6 @@ async function regenerateProject() {
                     confirmClass: 'btn-primary'
                 }
             );
-            // Handle modal close without confirmation
-            setTimeout(() => {
-                if (!hasResponded) resolve(false);
-            }, 50);
         });
 
         if (!confirmed) {

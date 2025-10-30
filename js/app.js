@@ -1864,6 +1864,10 @@ window.showConfirm = function(message, onConfirm, options = {}) {
 
 window.cancelConfirm = function() {
     console.log('cancelConfirm called');
+    if (window.confirmCancelCallback) {
+        window.confirmCancelCallback();
+        window.confirmCancelCallback = null;
+    }
     confirmCallback = null;
     closeModal('confirmModal');
 }
