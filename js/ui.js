@@ -176,15 +176,24 @@ export function setupEventListeners() {
 
     // Reset stats
     document.getElementById('resetStats').addEventListener('click', () => {
-        if (confirm('Are you sure you want to reset all statistics?')) {
-            state.stats = {
-                totalSessions: 0,
-                cardsStudied: new Set()
-            };
-            saveState();
-            showStatistics();
-            showNotification('Statistics reset successfully');
-        }
+        window.showConfirm(
+            'Are you sure you want to reset all statistics?',
+            () => {
+                state.stats = {
+                    totalSessions: 0,
+                    cardsStudied: new Set()
+                };
+                saveState();
+                showStatistics();
+                showNotification('Statistics reset successfully');
+            },
+            {
+                title: 'Reset Statistics',
+                confirmText: 'Reset All',
+                confirmIcon: 'fa-redo',
+                confirmClass: 'btn-danger'
+            }
+        );
     });
 
     // Keyboard shortcuts

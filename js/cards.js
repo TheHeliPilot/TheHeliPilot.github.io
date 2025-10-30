@@ -58,12 +58,21 @@ export function editCard(index) {
 }
 
 export function deleteCard(index) {
-    if (confirm('Are you sure you want to delete this card?')) {
-        state.flashcards.splice(index, 1);
-        saveFlashcards();
-        displayFlashcards();
-        showNotification('Card deleted successfully');
-    }
+    window.showConfirm(
+        'Are you sure you want to delete this card?',
+        () => {
+            state.flashcards.splice(index, 1);
+            saveFlashcards();
+            displayFlashcards();
+            showNotification('Card deleted successfully');
+        },
+        {
+            title: 'Delete Card',
+            confirmText: 'Delete',
+            confirmIcon: 'fa-trash',
+            confirmClass: 'btn-danger'
+        }
+    );
 }
 
 export function importCards(event) {

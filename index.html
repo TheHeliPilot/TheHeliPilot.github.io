@@ -13,7 +13,7 @@
 <body>
     <!-- Authentication Page -->
     <div id="authPage" class="auth-page">
-        <div class="auth-container">
+        <div class="auth-container">In
             <div class="auth-box">
                 <div class="auth-logo">
                     <i class="fas fa-graduation-cap"></i>
@@ -1686,23 +1686,6 @@
         </div>
     </div>
 
-    <!-- Custom Confirmation Modal -->
-    <div id="confirmModal" class="modal hidden">
-        <div class="modal-backdrop"></div>
-        <div class="modal-content" style="max-width: 450px;">
-            <div class="modal-header">
-                <h3 id="confirmModalTitle">Confirm Action</h3>
-            </div>
-            <div class="modal-body">
-                <p id="confirmModalMessage" style="color: var(--text-secondary); line-height: 1.6;"></p>
-            </div>
-            <div class="modal-footer">
-                <button id="confirmModalCancel" class="btn btn-secondary">Cancel</button>
-                <button id="confirmModalConfirm" class="btn btn-danger">Delete</button>
-            </div>
-        </div>
-    </div>
-
     <!-- Note File Title Modal -->
     <div id="noteFileTitleModal" class="modal hidden">
         <div class="modal-backdrop" onclick="closeNoteFileTitleModal()"></div>
@@ -1767,6 +1750,28 @@
             </div>
             <div class="modal-footer">
                 <button id="closeProgressModal" class="btn btn-secondary hidden">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmModal" class="modal hidden">
+        <div class="modal-backdrop" onclick="window.cancelConfirm()"></div>
+        <div class="modal-content" style="max-width: 450px;">
+            <div class="modal-header">
+                <h3 id="confirmModalTitle"><i class="fas fa-exclamation-triangle"></i> Confirm Action</h3>
+                <button class="modal-close" onclick="window.cancelConfirm(); event.stopPropagation();">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p id="confirmModalMessage" style="color: var(--text-secondary); line-height: 1.6;"></p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="window.cancelConfirm(); event.stopPropagation();">Cancel</button>
+                <button id="confirmModalButton" class="btn btn-danger">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
             </div>
         </div>
     </div>

@@ -1,4 +1,5 @@
 // Import Firebase functions
+// Updated: Fixed confirmation modal buttons
 import {
     signInWithEmailAndPassword,
     createUserWithEmailAndPassword,
@@ -603,30 +604,37 @@ window.editProject = async function(projectId) {
 };
 
 window.deleteProject = async function(projectId) {
-    if (!confirm('Are you sure you want to delete this project? All cards in this project will also be deleted.')) {
-        return;
-    }
+    showConfirm(
+        'Are you sure you want to delete this project? All cards in this project will also be deleted.',
+        async () => {
+            try {
+                // Delete all cards in this project
+                const projectCards = cards.filter(c => c.projectId === projectId);
+                for (const card of projectCards) {
+                    const cardRef = ref(window.db, `users/${currentUser.uid}/cards/${card.id}`);
+                    await remove(cardRef);
+                }
 
-    try {
-        // Delete all cards in this project
-        const projectCards = cards.filter(c => c.projectId === projectId);
-        for (const card of projectCards) {
-            const cardRef = ref(window.db, `users/${currentUser.uid}/cards/${card.id}`);
-            await remove(cardRef);
+                // Delete the project
+                const projectRef = ref(window.db, `users/${currentUser.uid}/projects/${projectId}`);
+                await remove(projectRef);
+
+                showNotification('Project deleted successfully', 'success');
+                await loadProjects();
+                await loadCards();
+                updateDashboard();
+            } catch (error) {
+                console.error('Error deleting project:', error);
+                showNotification('Error deleting project', 'error');
+            }
+        },
+        {
+            title: 'Delete Project',
+            confirmText: 'Delete Project',
+            confirmIcon: 'fa-trash',
+            confirmClass: 'btn-danger'
         }
-
-        // Delete the project
-        const projectRef = ref(window.db, `users/${currentUser.uid}/projects/${projectId}`);
-        await remove(projectRef);
-
-        showNotification('Project deleted successfully', 'success');
-        await loadProjects();
-        await loadCards();
-        updateDashboard();
-    } catch (error) {
-        console.error('Error deleting project:', error);
-        showNotification('Error deleting project', 'error');
-    }
+    );
 };
 
 function updateProjectSelects() {
@@ -869,20 +877,27 @@ window.editCard = async function(cardId) {
 };
 
 window.deleteCard = async function(cardId) {
-    if (!confirm('Are you sure you want to delete this card?')) {
-        return;
-    }
-
-    try {
-        const cardRef = ref(window.db, `users/${currentUser.uid}/cards/${cardId}`);
-        await remove(cardRef);
-        showNotification('Card deleted successfully', 'success');
-        await loadCards();
-        updateDashboard();
-    } catch (error) {
-        console.error('Error deleting card:', error);
-        showNotification('Error deleting card', 'error');
-    }
+    showConfirm(
+        'Are you sure you want to delete this card?',
+        async () => {
+            try {
+                const cardRef = ref(window.db, `users/${currentUser.uid}/cards/${cardId}`);
+                await remove(cardRef);
+                showNotification('Card deleted successfully', 'success');
+                await loadCards();
+                updateDashboard();
+            } catch (error) {
+                console.error('Error deleting card:', error);
+                showNotification('Error deleting card', 'error');
+            }
+        },
+        {
+            title: 'Delete Card',
+            confirmText: 'Delete Card',
+            confirmIcon: 'fa-trash',
+            confirmClass: 'btn-danger'
+        }
+    );
 };
 
 // ============================================
@@ -1687,19 +1702,26 @@ function initAccount() {
     });
 
     deleteAccountBtn.addEventListener('click', async () => {
-        if (!confirm('Are you sure you want to delete your account? This action cannot be undone!')) {
-            return;
-        }
-
-        try {
-            // Delete all user data
-            const userRef = ref(window.db, `users/${currentUser.uid}`);
-            await remove(userRef);
-            await deleteUser(currentUser);
-            showNotification('Account deleted', 'success');
-        } catch (error) {
-            showNotification('Error deleting account. Please sign in again and try.', 'error');
-        }
+        showConfirm(
+            'Are you sure you want to delete your account? This action cannot be undone!',
+            async () => {
+                try {
+                    // Delete all user data
+                    const userRef = ref(window.db, `users/${currentUser.uid}`);
+                    await remove(userRef);
+                    await deleteUser(currentUser);
+                    showNotification('Account deleted', 'success');
+                } catch (error) {
+                    showNotification('Error deleting account. Please sign in again and try.', 'error');
+                }
+            },
+            {
+                title: 'Delete Account',
+                confirmText: 'Delete Account',
+                confirmIcon: 'fa-exclamation-triangle',
+                confirmClass: 'btn-danger'
+            }
+        );
     });
 
     // API Key Management - OpenAI
@@ -1796,6 +1818,54 @@ window.closeModal = function(modalId) {
         // Reopen the manage cards modal
         openModal('publicCardsModal');
     }
+}
+
+// Custom confirmation dialog
+let confirmCallback = null;
+
+window.showConfirm = function(message, onConfirm, options = {}) {
+    const {
+        title = 'Confirm Action',
+        confirmText = 'Delete',
+        confirmIcon = 'fa-trash',
+        confirmClass = 'btn-danger'
+    } = options;
+
+    console.log('showConfirm called with message:', message);
+
+    // Set modal content
+    document.getElementById('confirmModalTitle').innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${title}`;
+    document.getElementById('confirmModalMessage').textContent = message;
+
+    // Set confirm button
+    const confirmBtn = document.getElementById('confirmModalButton');
+    confirmBtn.className = `btn ${confirmClass}`;
+    confirmBtn.innerHTML = `<i class="fas ${confirmIcon}"></i> ${confirmText}`;
+
+    // Store callback
+    confirmCallback = onConfirm;
+
+    // Remove any existing onclick handler and add new one
+    confirmBtn.onclick = (e) => {
+        console.log('Confirm button clicked!');
+        e.stopPropagation();
+        if (confirmCallback) {
+            console.log('Executing callback');
+            confirmCallback();
+            confirmCallback = null;
+        }
+        closeModal('confirmModal');
+    };
+
+    console.log('Opening modal');
+    // Show modal
+    openModal('confirmModal');
+}
+
+window.cancelConfirm = function() {
+    console.log('cancelConfirm called');
+    confirmCallback = null;
+    closeModal('confirmModal');
 }
 
 // ============================================
@@ -3379,55 +3449,8 @@ async function loadGlobalLeaderboard() {
 }
 
 // ============================================
-// CUSTOM CONFIRMATION DIALOG
+// CUSTOM CONFIRMATION DIALOG (Removed - using window.showConfirm instead)
 // ============================================
-
-function showConfirmDialog(title, message, confirmText = 'Delete', confirmClass = 'btn-danger') {
-    return new Promise((resolve) => {
-        const modal = document.getElementById('confirmModal');
-        const titleEl = document.getElementById('confirmModalTitle');
-        const messageEl = document.getElementById('confirmModalMessage');
-        const cancelBtn = document.getElementById('confirmModalCancel');
-        const confirmBtn = document.getElementById('confirmModalConfirm');
-        const backdrop = modal.querySelector('.modal-backdrop');
-
-        titleEl.textContent = title;
-        messageEl.textContent = message;
-        confirmBtn.textContent = confirmText;
-        confirmBtn.className = `btn ${confirmClass}`;
-
-        // Show modal
-        modal.classList.remove('hidden');
-
-        // Handle cancel
-        const handleCancel = () => {
-            modal.classList.add('hidden');
-            cleanup();
-            resolve(false);
-        };
-
-        // Handle confirm
-        const handleConfirm = () => {
-            modal.classList.add('hidden');
-            cleanup();
-            resolve(true);
-        };
-
-        // Cleanup listeners
-        const cleanup = () => {
-            cancelBtn.removeEventListener('click', handleCancel);
-            confirmBtn.removeEventListener('click', handleConfirm);
-            if (backdrop) backdrop.removeEventListener('click', handleCancel);
-        };
-
-        cancelBtn.addEventListener('click', handleCancel);
-        confirmBtn.addEventListener('click', handleConfirm);
-        if (backdrop) backdrop.addEventListener('click', handleCancel);
-    });
-}
-
-// Make showConfirmDialog available globally
-window.showConfirmDialog = showConfirmDialog;
 
 // ============================================
 // INITIALIZATION

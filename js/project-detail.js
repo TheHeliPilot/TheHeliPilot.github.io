@@ -1508,7 +1508,28 @@ async function regenerateProject() {
             ? `This will regenerate cards from "${selectedNotes[0].title}". Continue?`
             : `This will regenerate cards from ${selectedCount} selected note files. Continue?`;
 
-        if (!confirm(message)) {
+        const confirmed = await new Promise((resolve) => {
+            let hasResponded = false;
+            window.showConfirm(
+                message,
+                () => {
+                    hasResponded = true;
+                    resolve(true);
+                },
+                {
+                    title: 'Regenerate Cards',
+                    confirmText: 'Continue',
+                    confirmIcon: 'fa-sync',
+                    confirmClass: 'btn-primary'
+                }
+            );
+            // Handle modal close without confirmation
+            setTimeout(() => {
+                if (!hasResponded) resolve(false);
+            }, 50);
+        });
+
+        if (!confirmed) {
             return;
         }
 
@@ -3129,7 +3150,25 @@ async function cleanNotesWithAI() {
     // Check text length
     const wordCount = rawText.split(/\s+/).length;
     if (wordCount > 10000) {
-        const confirmed = confirm(`Your notes are very long (${wordCount} words). AI cleaning may take a while and could be expensive. Continue?`);
+        const confirmed = await new Promise((resolve) => {
+            let hasResponded = false;
+            window.showConfirm(
+                `Your notes are very long (${wordCount} words). AI cleaning may take a while and could be expensive. Continue?`,
+                () => {
+                    hasResponded = true;
+                    resolve(true);
+                },
+                {
+                    title: 'Long Notes Warning',
+                    confirmText: 'Continue',
+                    confirmIcon: 'fa-exclamation-triangle',
+                    confirmClass: 'btn-primary'
+                }
+            );
+            setTimeout(() => {
+                if (!hasResponded) resolve(false);
+            }, 50);
+        });
         if (!confirmed) return;
     }
 
