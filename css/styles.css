@@ -1831,10 +1831,16 @@ select:hover,
 }
 
 .study-card-active {
-    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    /* Auto height to fit content - no animations, no transitions, no scaling */
+    width: 100% !important;
+    min-height: 200px !important;
+    max-height: 600px !important;
+    box-sizing: border-box !important;
+    overflow-y: auto !important;
+    position: relative !important;
 }
 
-/* Slide out animations for active card */
+/* Enable slide animations on active card (NO SCALING) */
 .study-card-active.slide-out-left {
     animation: cardSlideOutLeft 0.4s cubic-bezier(0.4, 0, 1, 1) forwards;
 }
@@ -1843,19 +1849,18 @@ select:hover,
     animation: cardSlideOutRight 0.4s cubic-bezier(0.4, 0, 1, 1) forwards;
 }
 
-/* Slide in animations for active card */
 .study-card-active.slide-in-from-back {
-    animation: cardSlideInFromBack 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    animation: cardSlideInFromBack 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 /* Keyframes for card slide out left (next - goes away down) */
 @keyframes cardSlideOutLeft {
     0% {
-        transform: translateX(0) translateY(0) scale(1) rotateZ(0deg);
+        transform: translateX(0) translateY(0) rotateZ(0deg);
         opacity: 1;
     }
     100% {
-        transform: translateX(-150%) translateY(50px) scale(0.8) rotateZ(-15deg);
+        transform: translateX(-150%) translateY(50px) rotateZ(-15deg);
         opacity: 0;
     }
 }
@@ -1863,11 +1868,11 @@ select:hover,
 /* Keyframes for card slide out right (not used currently) */
 @keyframes cardSlideOutRight {
     0% {
-        transform: translateX(0) translateY(0) scale(1) rotateZ(0deg);
+        transform: translateX(0) translateY(0) rotateZ(0deg);
         opacity: 1;
     }
     100% {
-        transform: translateX(150%) translateY(50px) scale(0.8) rotateZ(15deg);
+        transform: translateX(150%) translateY(50px) rotateZ(15deg);
         opacity: 0;
     }
 }
@@ -1875,15 +1880,11 @@ select:hover,
 /* Keyframes for card sliding in from back of stack */
 @keyframes cardSlideInFromBack {
     0% {
-        transform: translateY(12px) scale(0.94);
+        transform: translateY(12px);
         opacity: 0.3;
     }
-    50% {
-        transform: translateY(6px) scale(0.97);
-        opacity: 0.6;
-    }
     100% {
-        transform: translateY(0) scale(1);
+        transform: translateY(0);
         opacity: 1;
     }
 }
@@ -1891,11 +1892,11 @@ select:hover,
 /* Keyframes for previous card sliding in from top-left */
 @keyframes cardSlideInFromTopLeft {
     0% {
-        transform: translateX(-100%) translateY(-30px) scale(0.95) rotateZ(-8deg);
+        transform: translateX(-100%) translateY(-30px) rotateZ(-8deg);
         opacity: 0;
     }
     100% {
-        transform: translateX(0) translateY(0) scale(1) rotateZ(0deg);
+        transform: translateX(0) translateY(0) rotateZ(0deg);
         opacity: 1;
     }
 }
@@ -1996,6 +1997,34 @@ select:hover,
 
     .dashboard-grid {
         grid-template-columns: repeat(2, 1fr);
+    }
+
+    /* Project Detail Page Tablet */
+    .notes-toolbar {
+        flex-wrap: wrap;
+    }
+
+    .notes-toolbar > div {
+        flex: 1;
+        min-width: 200px;
+    }
+
+    #noteFilesList {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+
+    /* Mind Map Stats - 2 columns on tablet */
+    #mindMapTab > div:first-of-type {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+
+    .actions-group {
+        flex-wrap: wrap;
+    }
+
+    .actions-group .btn {
+        flex: 1 1 auto;
+        min-width: 150px;
     }
 }
 
@@ -2106,11 +2135,18 @@ select:hover,
 
     /* Cards grid - single column */
     .cards-grid {
+        grid-template-columns: 1fr !important;
         gap: var(--spacing-md);
     }
 
     .card-item {
         padding: var(--spacing-md);
+    }
+
+    /* Test and Study cards specific */
+    #testCardsList,
+    #studyCardsList {
+        grid-template-columns: 1fr !important;
     }
 
     /* Card actions - stack on mobile */
@@ -2216,6 +2252,10 @@ select:hover,
     }
 
     /* Study mode mobile */
+    #studyModeContainer {
+        padding: var(--spacing-md) !important;
+    }
+
     .study-nav-btn {
         display: none;
     }
@@ -2226,12 +2266,12 @@ select:hover,
     }
 
     .study-card-content {
-        font-size: 1.25rem;
+        font-size: 1.125rem;
     }
 
     .study-card-front,
     .study-card-back {
-        padding: var(--spacing-lg);
+        padding: var(--spacing-md);
     }
 
     .study-swipe-hint {
@@ -2246,6 +2286,17 @@ select:hover,
         display: none;
     }
 
+    /* Study mode response buttons */
+    #studyModeResponseButtons {
+        flex-wrap: wrap;
+        gap: var(--spacing-sm);
+    }
+
+    #studyModeResponseButtons .btn {
+        flex: 1 1 45%;
+        min-width: 120px;
+    }
+
     .study-card-container {
         min-height: 400px;
         gap: 0;
@@ -2256,16 +2307,21 @@ select:hover,
         padding: var(--spacing-sm);
         overflow-x: auto;
         flex-wrap: nowrap;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
     }
 
     .project-tab {
         padding: var(--spacing-sm) var(--spacing-md);
         font-size: 0.875rem;
         white-space: nowrap;
+        min-width: auto;
     }
 
     .project-tab i {
-        display: none;
+        display: inline-block;
+        margin-right: 0.5rem;
+        font-size: 1rem;
     }
 
     .project-tab-content {
@@ -2281,6 +2337,13 @@ select:hover,
 
     .notes-toolbar > div {
         width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-sm);
+    }
+
+    .notes-toolbar > div:last-child {
+        margin-left: 0;
     }
 
     .notes-toolbar label {
@@ -2289,7 +2352,29 @@ select:hover,
     }
 
     .notes-toolbar select {
+        width: 100% !important;
+    }
+
+    .notes-toolbar .btn {
         width: 100%;
+        justify-content: center;
+    }
+
+    /* Note files grid - better mobile layout */
+    #noteFilesList {
+        grid-template-columns: 1fr !important;
+        gap: var(--spacing-md);
+    }
+
+    /* Mind Map Stats Grid - 2 columns on mobile */
+    #mindMapTab > div:first-of-type {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: var(--spacing-sm);
+    }
+
+    /* Mind Map Container - responsive height */
+    #projectMindMapContainer {
+        height: 400px !important;
     }
 
     #notesEditor {
@@ -2815,11 +2900,18 @@ select:hover,
     /* Project Detail Small Phones */
     .project-tabs {
         padding: var(--spacing-xs);
+        gap: var(--spacing-xs);
     }
 
     .project-tab {
         padding: var(--spacing-xs) var(--spacing-sm);
         font-size: 0.813rem;
+        flex: 1;
+        min-width: 80px;
+    }
+
+    .project-tab i {
+        display: none;
     }
 
     .project-tab-content {
@@ -2835,8 +2927,18 @@ select:hover,
         font-size: 0.813rem;
     }
 
+    /* Mind Map Stats - stack vertically on small phones */
+    #mindMapTab > div:first-of-type {
+        grid-template-columns: 1fr !important;
+    }
+
     #projectMindMapContainer {
-        height: 300px;
+        height: 300px !important;
+    }
+
+    /* Note files list on small phones */
+    #noteFilesList {
+        gap: var(--spacing-sm);
     }
 
     .study-card {

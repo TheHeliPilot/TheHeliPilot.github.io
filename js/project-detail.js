@@ -2613,6 +2613,128 @@ function initStudyMode() {
             else if (e.key === '3') setCardMastery('good');
             else if (e.key === '4') setCardMastery('mastered');
         });
+
+        // Touch/Swipe navigation for mobile and desktop
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let touchEndX = 0;
+        let touchEndY = 0;
+        let isDragging = false;
+
+        const studyCardContainer = document.getElementById('studyCardContainer');
+        const activeCard = document.getElementById('activeStudyCard');
+
+        // Mouse and Touch start
+        const handleStart = (e) => {
+            const studyModeActive = document.getElementById('studyModeCard')?.classList.contains('hidden') === false;
+            if (!studyModeActive) return;
+
+            isDragging = true;
+            touchStartX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+            touchStartY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
+
+            if (activeCard) {
+                activeCard.style.transition = 'none';
+            }
+
+            if (studyCardContainer) {
+                studyCardContainer.style.cursor = 'grabbing';
+            }
+        };
+
+        // Mouse and Touch move
+        const handleMove = (e) => {
+            if (!isDragging) return;
+
+            const studyModeActive = document.getElementById('studyModeCard')?.classList.contains('hidden') === false;
+            if (!studyModeActive) return;
+
+            const currentX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+            const currentY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
+            const diffX = currentX - touchStartX;
+            const diffY = currentY - touchStartY;
+
+            // Only apply transform if horizontal swipe is dominant
+            if (Math.abs(diffX) > Math.abs(diffY) && activeCard) {
+                e.preventDefault();
+                const rotation = diffX / 20;
+                const opacity = 1 - Math.abs(diffX) / 400;
+                activeCard.style.transform = `translateX(${diffX}px) rotate(${rotation}deg)`;
+                activeCard.style.opacity = Math.max(0.3, opacity);
+            }
+        };
+
+        // Mouse and Touch end
+        const handleEnd = (e) => {
+            if (!isDragging) return;
+
+            const studyModeActive = document.getElementById('studyModeCard')?.classList.contains('hidden') === false;
+            if (!studyModeActive) return;
+
+            isDragging = false;
+            touchEndX = e.type.includes('mouse') ? e.clientX : e.changedTouches[0].clientX;
+            touchEndY = e.type.includes('mouse') ? e.clientY : e.changedTouches[0].clientY;
+
+            const diffX = touchEndX - touchStartX;
+            const diffY = touchEndY - touchStartY;
+
+            if (activeCard) {
+                activeCard.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+            }
+
+            if (studyCardContainer) {
+                studyCardContainer.style.cursor = 'grab';
+            }
+
+            // Check if horizontal swipe is dominant (more horizontal than vertical)
+            if (Math.abs(diffX) > Math.abs(diffY)) {
+                // Smaller threshold for PC (50px) to avoid triggering navigation bar
+                // Larger threshold for touch devices (100px) for intentional swipes
+                const isTouchDevice = e.type.includes('touch');
+                const swipeThreshold = isTouchDevice ? 100 : 50;
+
+                if (diffX > swipeThreshold) {
+                    // Swipe right - go to previous card (skip animation for smooth swipe)
+                    navigateStudyMode(-1, true);
+                } else if (diffX < -swipeThreshold) {
+                    // Swipe left - go to next card (skip animation for smooth swipe)
+                    navigateStudyMode(1, true);
+                } else {
+                    // Reset position if swipe wasn't far enough
+                    if (activeCard) {
+                        activeCard.style.transform = '';
+                        activeCard.style.opacity = '';
+                    }
+                }
+            } else {
+                // Reset position for vertical swipes
+                if (activeCard) {
+                    activeCard.style.transform = '';
+                    activeCard.style.opacity = '';
+                }
+            }
+        };
+
+        // Add touch event listeners
+        if (studyCardContainer) {
+            studyCardContainer.addEventListener('touchstart', handleStart, { passive: false });
+            studyCardContainer.addEventListener('touchmove', handleMove, { passive: false });
+            studyCardContainer.addEventListener('touchend', handleEnd);
+
+            // Add mouse event listeners for desktop dragging
+            studyCardContainer.addEventListener('mousedown', handleStart);
+            studyCardContainer.addEventListener('mousemove', handleMove);
+            studyCardContainer.addEventListener('mouseup', handleEnd);
+            studyCardContainer.addEventListener('mouseleave', () => {
+                if (isDragging && activeCard) {
+                    isDragging = false;
+                    activeCard.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+                    activeCard.style.transform = '';
+                    activeCard.style.opacity = '';
+                    studyCardContainer.style.cursor = 'grab';
+                }
+            });
+        }
     }
 }
 
@@ -2797,7 +2919,7 @@ function sortCardsHierarchically(cards) {
 }
 
 // Display current study card
-function displayStudyCard() {
+function displayStudyCard(targetElement = null) {
     if (studyModeState.currentIndex >= studyModeState.cards.length) {
         showStudyComplete();
         return;
@@ -2811,6 +2933,9 @@ function displayStudyCard() {
     document.getElementById('studyModeProgress').textContent = `${currentNum} / ${totalCards}`;
     document.getElementById('studyModeProgressBar').style.width = `${(currentNum / totalCards) * 100}%`;
 
+    // Determine which element to update (default is active card)
+    const cardElement = targetElement || document.getElementById('activeStudyCard');
+
     // Update card content
     const levelLabels = {
         0: 'Overview',
@@ -2819,149 +2944,196 @@ function displayStudyCard() {
         3: 'Detailed Concept',
         4: 'Specific Detail'
     };
-    document.getElementById('studyCardLevel').textContent = levelLabels[card.level] || `Level ${card.level}`;
-    document.getElementById('studyCardLevel').style.background = card.color || '#667eea';
-    document.getElementById('studyCardTopic').textContent = card.topic || card.term || 'Untitled';
-    document.getElementById('studyCardContent').textContent = card.content || card.definition || '';
 
-    // Reset active card transform
-    const activeCard = document.getElementById('activeStudyCard');
-    if (activeCard && !activeCard.classList.contains('slide-in-from-back')) {
-        activeCard.style.transform = '';
-        activeCard.style.opacity = '';
+    const levelBadge = targetElement ? cardElement.querySelector('[data-card-level]') : document.getElementById('studyCardLevel');
+    const topicElement = targetElement ? cardElement.querySelector('[data-card-topic]') : document.getElementById('studyCardTopic');
+    const contentElement = targetElement ? cardElement.querySelector('[data-card-content]') : document.getElementById('studyCardContent');
+
+    if (levelBadge) {
+        levelBadge.textContent = levelLabels[card.level] || `Level ${card.level}`;
+        levelBadge.style.background = card.color || '#667eea';
+    }
+    if (topicElement) {
+        topicElement.textContent = card.topic || card.term || 'Untitled';
+    }
+    if (contentElement) {
+        contentElement.textContent = card.content || card.definition || '';
     }
 
-    // Update navigation buttons
-    document.getElementById('studyModePrev').disabled = studyModeState.currentIndex === 0;
-    document.getElementById('studyModeNext').disabled = studyModeState.currentIndex === totalCards - 1;
-
-    // Highlight current mastery level (reset all first, then highlight current if exists)
-    const currentMastery = card.mastery || null;
-    document.querySelectorAll('.mastery-btn').forEach(btn => {
-        if (currentMastery && btn.dataset.mastery === currentMastery) {
-            btn.style.transform = 'scale(1.05)';
-            btn.style.boxShadow = '0 0 0 3px rgba(255,255,255,0.3)';
-            btn.style.opacity = '1';
-        } else {
-            btn.style.transform = 'scale(1)';
-            btn.style.boxShadow = 'none';
-            btn.style.opacity = '0.8';
+    // Reset active card transform (only for main card)
+    if (!targetElement) {
+        const activeCard = document.getElementById('activeStudyCard');
+        if (activeCard && !activeCard.classList.contains('slide-in-from-back')) {
+            activeCard.style.transform = '';
+            activeCard.style.opacity = '';
         }
-    });
+
+        // Update navigation buttons
+        document.getElementById('studyModePrev').disabled = studyModeState.currentIndex === 0;
+        document.getElementById('studyModeNext').disabled = studyModeState.currentIndex === totalCards - 1;
+
+        // Highlight current mastery level (reset all first, then highlight current if exists)
+        const currentMastery = card.mastery || null;
+        document.querySelectorAll('.mastery-btn').forEach(btn => {
+            if (currentMastery && btn.dataset.mastery === currentMastery) {
+                btn.style.transform = 'scale(1.05)';
+                btn.style.boxShadow = '0 0 0 3px rgba(255,255,255,0.3)';
+                btn.style.opacity = '1';
+            } else {
+                btn.style.transform = 'scale(1)';
+                btn.style.boxShadow = 'none';
+                btn.style.opacity = '0.8';
+            }
+        });
+    }
 }
 
-// Navigate study mode with animation
-function navigateStudyMode(direction) {
+// Preload next card content onto a background stack card
+function preloadNextCard(nextIndex) {
+    if (nextIndex < 0 || nextIndex >= studyModeState.cards.length) return;
+
+    const card = studyModeState.cards[nextIndex];
+    const stackCards = document.querySelectorAll('.study-card-stack');
+
+    // Use the first stack card (back-3) to show the next card
+    if (stackCards.length > 0) {
+        const preloadCard = stackCards[0];
+
+        // Update card content
+        const levelLabels = {
+            0: 'Overview',
+            1: 'Main Topic',
+            2: 'Subtopic',
+            3: 'Detailed Concept',
+            4: 'Specific Detail'
+        };
+
+        // FIRST: Disable transitions to prevent fade/transform effects
+        preloadCard.style.setProperty('transition', 'none', 'important');
+
+        // Force a reflow to ensure transition is disabled before changing other properties
+        preloadCard.offsetHeight;
+
+        // THEN: Remove ALL visual effects - make it look EXACTLY like the active card
+        preloadCard.style.setProperty('opacity', '1', 'important');
+        preloadCard.style.setProperty('transform', 'none', 'important');
+        preloadCard.style.setProperty('filter', 'none', 'important');
+        preloadCard.style.setProperty('backdrop-filter', 'none', 'important');
+        preloadCard.style.setProperty('will-change', 'auto', 'important');
+        preloadCard.style.setProperty('-webkit-font-smoothing', 'auto', 'important');
+        preloadCard.style.setProperty('backface-visibility', 'visible', 'important');
+
+        // Create content HTML similar to active card
+        preloadCard.innerHTML = `
+            <div style="text-align: center; margin-bottom: var(--spacing-sm);">
+                <div data-card-level style="display: inline-block; padding: 0.375rem 0.75rem; background: ${card.color || '#667eea'}; color: white; border-radius: var(--radius-md); font-size: 0.75rem;">${levelLabels[card.level] || `Level ${card.level}`}</div>
+            </div>
+            <h2 data-card-topic style="color: var(--primary); margin-bottom: var(--spacing-md); font-size: 1.5rem; text-align: center;">${card.topic || card.term || 'Untitled'}</h2>
+            <div style="height: 2px; background: linear-gradient(90deg, transparent, var(--border), transparent); margin: var(--spacing-md) 0;"></div>
+            <div data-card-content style="color: var(--text); font-size: 1rem; line-height: 1.6;">${card.content || card.definition || ''}</div>
+        `;
+    }
+}
+
+// Navigate study mode with animation (NO SCALING)
+function navigateStudyMode(direction, skipAnimation = false) {
     const newIndex = studyModeState.currentIndex + direction;
     if (newIndex < 0 || newIndex >= studyModeState.cards.length) return;
 
     const activeCard = document.getElementById('activeStudyCard');
-    const stackCards = document.querySelectorAll('.study-card-stack');
 
-    // Update to next card content immediately
-    studyModeState.currentIndex = newIndex;
-    const nextCard = studyModeState.cards[studyModeState.currentIndex];
+    if (skipAnimation) {
+        // Simple fade for swipe navigation
+        activeCard.style.transition = 'opacity 0.15s ease';
+        activeCard.style.opacity = '0';
 
-    const levelLabels = {
-        0: 'Overview',
-        1: 'Main Topic',
-        2: 'Subtopic',
-        3: 'Detailed Concept',
-        4: 'Specific Detail'
-    };
+        setTimeout(() => {
+            // Clear any transforms
+            activeCard.style.transform = '';
 
-    if (direction > 0) {
-        // NEXT: Card slides away to left, next card comes from behind
-        const nextCardElement = stackCards[2]; // back-1 position
-        if (nextCardElement && nextCard) {
-            nextCardElement.innerHTML = `
-                <div style="text-align: center; margin-bottom: var(--spacing-lg);">
-                    <div style="display: inline-block; padding: 0.5rem 1rem; background: ${nextCard.color || '#667eea'}; color: white; border-radius: var(--radius-md); font-size: 0.875rem;">${levelLabels[nextCard.level] || `Level ${nextCard.level}`}</div>
-                </div>
-                <h2 style="color: var(--primary); margin-bottom: var(--spacing-lg); font-size: 2rem; text-align: center;">${nextCard.topic || nextCard.term || 'Untitled'}</h2>
-                <div style="height: 2px; background: linear-gradient(90deg, transparent, var(--border), transparent); margin: var(--spacing-lg) 0;"></div>
-                <div style="color: var(--text); font-size: 1.125rem; line-height: 1.8;">${nextCard.content || nextCard.definition || ''}</div>
-            `;
-        }
+            // Update index
+            studyModeState.currentIndex = newIndex;
 
-        activeCard.classList.add('slide-out-left');
+            // Update content
+            displayStudyCard();
 
-        // Animate stack cards moving up simultaneously
-        stackCards.forEach((card, index) => {
-            const currentPos = parseInt(card.dataset.position.split('-')[1]);
-            if (currentPos > 1) {
-                const newPos = currentPos - 1;
-                animateStackCard(card, currentPos, newPos);
-                card.dataset.position = `back-${newPos}`;
-            } else if (currentPos === 1) {
-                animateStackCard(card, currentPos, 0);
-                card.dataset.position = 'back-0';
-            }
-        });
-    } else {
-        // PREVIOUS: Previous card slides in from left on top of current card
-        // Create a temporary card element to slide in
-        const tempCard = document.createElement('div');
-        tempCard.id = 'tempPreviousCard';
-        tempCard.className = 'study-card-active';
-        tempCard.style.cssText = 'position: absolute; top: 0; left: 0; width: 100%; background: var(--surface); border: 2px solid var(--border); border-radius: var(--radius-xl); padding: 3rem; box-shadow: var(--shadow-xl); z-index: 20; transform: translateX(-100%) translateY(-30px) scale(0.95) rotateZ(-8deg); opacity: 0;';
-        tempCard.innerHTML = `
-            <div style="text-align: center; margin-bottom: var(--spacing-lg);">
-                <div style="display: inline-block; padding: 0.5rem 1rem; background: ${nextCard.color || '#667eea'}; color: white; border-radius: var(--radius-md); font-size: 0.875rem;">${levelLabels[nextCard.level] || `Level ${nextCard.level}`}</div>
-            </div>
-            <h2 style="color: var(--primary); margin-bottom: var(--spacing-lg); font-size: 2rem; text-align: center;">${nextCard.topic || nextCard.term || 'Untitled'}</h2>
-            <div style="height: 2px; background: linear-gradient(90deg, transparent, var(--border), transparent); margin: var(--spacing-lg) 0;"></div>
-            <div style="color: var(--text); font-size: 1.125rem; line-height: 1.8;">${nextCard.content || nextCard.definition || ''}</div>
-        `;
-
-        // Add to container
-        document.getElementById('studyCardContainer').appendChild(tempCard);
-
-        // Trigger slide in animation from top-left (use requestAnimationFrame to ensure it's rendered first)
-        requestAnimationFrame(() => {
+            // Fade back in
             requestAnimationFrame(() => {
-                tempCard.style.animation = 'cardSlideInFromTopLeft 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards';
+                activeCard.style.opacity = '1';
             });
-        });
-    }
 
-    // Wait for animation to complete, then update main card
-    setTimeout(() => {
-        displayStudyCard();
+            // Clean up
+            setTimeout(() => {
+                activeCard.style.transition = '';
+            }, 150);
+        }, 150);
+    } else {
+        // Full animation for button clicks
 
-        // Remove animation classes
-        activeCard.classList.remove('slide-out-left', 'slide-out-right');
+        // STEP 1: Preload the next card content onto the background stack card BEFORE animation starts
+        preloadNextCard(newIndex);
 
-        // Remove temp previous card if it exists
-        const tempCard = document.getElementById('tempPreviousCard');
-        if (tempCard) {
-            tempCard.remove();
+        // STEP 2: Start the slide-out animation on current card
+        if (direction > 0) {
+            // NEXT: Slide out to left
+            activeCard.classList.add('slide-out-left');
+        } else {
+            // PREVIOUS: Slide out to right
+            activeCard.classList.add('slide-out-right');
         }
 
-        // Reset stack positions
-        stackCards.forEach((card, index) => {
-            card.dataset.position = `back-${3 - index}`;
-            card.style.transform = '';
-            card.style.opacity = '';
-            card.innerHTML = '';
-        });
-    }, 400);
+        // STEP 3: After animation completes, update the active card and bring it forward
+        setTimeout(() => {
+            // Remove animation classes
+            activeCard.classList.remove('slide-out-left', 'slide-out-right', 'slide-in-from-back');
+
+            // Clear any transforms
+            activeCard.style.transform = '';
+            activeCard.style.opacity = '1';
+
+            // Update index
+            studyModeState.currentIndex = newIndex;
+
+            // Update card content
+            displayStudyCard();
+
+            // Clear the preloaded card and hide it
+            const stackCards = document.querySelectorAll('.study-card-stack');
+            if (stackCards.length > 0) {
+                stackCards[0].innerHTML = '';
+                stackCards[0].style.setProperty('opacity', '0', 'important');
+                stackCards[0].style.setProperty('transform', 'none', 'important');
+                stackCards[0].style.setProperty('transition', 'none', 'important');
+            }
+
+            // Add slide-in animation to bring the card forward from the back
+            requestAnimationFrame(() => {
+                activeCard.classList.add('slide-in-from-back');
+
+                // Clean up animation class after it completes
+                setTimeout(() => {
+                    activeCard.classList.remove('slide-in-from-back');
+                    activeCard.style.transform = '';
+                }, 400);
+            });
+        }, 400);
+    }
 }
 
 // Animate stack card position
 function animateStackCard(card, fromPos, toPos) {
     const positions = {
-        0: { y: 0, scale: 1, opacity: 1 },
-        1: { y: 4, scale: 0.98, opacity: 0.7 },
-        2: { y: 8, scale: 0.96, opacity: 0.5 },
-        3: { y: 12, scale: 0.94, opacity: 0.3 }
+        0: { y: 0, opacity: 1 },
+        1: { y: 4, opacity: 0.7 },
+        2: { y: 8, opacity: 0.5 },
+        3: { y: 12, opacity: 0.3 }
     };
 
     const from = positions[fromPos];
     const to = positions[toPos];
 
     card.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
-    card.style.transform = `translateY(${to.y}px) scale(${to.scale})`;
+    card.style.transform = `translateY(${to.y}px)`;
     card.style.opacity = to.opacity;
 }
 
