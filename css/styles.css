@@ -1853,6 +1853,10 @@ select:hover,
     animation: cardSlideInFromBack 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
+.study-card-active.slide-in-from-left {
+    animation: cardSlideInFromLeft 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
 /* Keyframes for card slide out left (next - goes away down) */
 @keyframes cardSlideOutLeft {
     0% {
@@ -1889,10 +1893,10 @@ select:hover,
     }
 }
 
-/* Keyframes for previous card sliding in from top-left */
-@keyframes cardSlideInFromTopLeft {
+/* Keyframes for previous card sliding in from left */
+@keyframes cardSlideInFromLeft {
     0% {
-        transform: translateX(-100%) translateY(-30px) rotateZ(-8deg);
+        transform: translateX(-150%) translateY(50px) rotateZ(-15deg);
         opacity: 0;
     }
     100% {

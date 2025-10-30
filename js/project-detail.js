@@ -3070,53 +3070,92 @@ function navigateStudyMode(direction, skipAnimation = false) {
     } else {
         // Full animation for button clicks
 
-        // STEP 1: Preload the next card content onto the background stack card BEFORE animation starts
-        preloadNextCard(newIndex);
-
-        // STEP 2: Start the slide-out animation on current card
         if (direction > 0) {
-            // NEXT: Slide out to left
+            // NEXT: Show preloaded card behind, current card slides left
+
+            // STEP 1: Preload the next card behind
+            preloadNextCard(newIndex);
+
+            // STEP 2: Slide current card to left
             activeCard.classList.add('slide-out-left');
+
+            // STEP 3: After animation, just update content
+            setTimeout(() => {
+                activeCard.classList.remove('slide-out-left', 'slide-out-right', 'slide-in-from-back', 'slide-in-from-left');
+
+                studyModeState.currentIndex = newIndex;
+                displayStudyCard();
+
+                // Hide preloaded card
+                const stackCards = document.querySelectorAll('.study-card-stack');
+                if (stackCards.length > 0) {
+                    stackCards[0].innerHTML = '';
+                    stackCards[0].style.setProperty('opacity', '0', 'important');
+                    stackCards[0].style.setProperty('transform', 'none', 'important');
+                    stackCards[0].style.setProperty('transition', 'none', 'important');
+                }
+
+                activeCard.style.transform = '';
+                activeCard.style.opacity = '1';
+            }, 400);
+
         } else {
-            // PREVIOUS: Slide out to right
-            activeCard.classList.add('slide-out-right');
-        }
+            // PREVIOUS: Current card stays visible, new card slides in from left on top
 
-        // STEP 3: After animation completes, update the active card and bring it forward
-        setTimeout(() => {
-            // Remove animation classes
-            activeCard.classList.remove('slide-out-left', 'slide-out-right', 'slide-in-from-back');
-
-            // Clear any transforms
-            activeCard.style.transform = '';
-            activeCard.style.opacity = '1';
-
-            // Update index
-            studyModeState.currentIndex = newIndex;
-
-            // Update card content
-            displayStudyCard();
-
-            // Clear the preloaded card and hide it
             const stackCards = document.querySelectorAll('.study-card-stack');
             if (stackCards.length > 0) {
-                stackCards[0].innerHTML = '';
-                stackCards[0].style.setProperty('opacity', '0', 'important');
-                stackCards[0].style.setProperty('transform', 'none', 'important');
-                stackCards[0].style.setProperty('transition', 'none', 'important');
+                const slideInCard = stackCards[0];
+
+                // Load the previous card content onto the stack card
+                const card = studyModeState.cards[newIndex];
+                const levelLabels = {
+                    0: 'Overview',
+                    1: 'Main Topic',
+                    2: 'Subtopic',
+                    3: 'Detailed Concept',
+                    4: 'Specific Detail'
+                };
+
+                // Position stack card off-screen to the left
+                slideInCard.style.setProperty('transition', 'none', 'important');
+                slideInCard.style.setProperty('transform', 'translateX(-150%) translateY(50px) rotateZ(-15deg)', 'important');
+                slideInCard.style.setProperty('opacity', '0', 'important');
+                slideInCard.style.setProperty('z-index', '20', 'important'); // Above active card
+
+                // Add content to the stack card
+                slideInCard.innerHTML = `
+                    <div style="text-align: center; margin-bottom: var(--spacing-sm);">
+                        <div data-card-level style="display: inline-block; padding: 0.375rem 0.75rem; background: ${card.color || '#667eea'}; color: white; border-radius: var(--radius-md); font-size: 0.75rem;">${levelLabels[card.level] || `Level ${card.level}`}</div>
+                    </div>
+                    <h2 data-card-topic style="color: var(--primary); margin-bottom: var(--spacing-md); font-size: 1.5rem; text-align: center;">${card.topic || card.term || 'Untitled'}</h2>
+                    <div style="height: 2px; background: linear-gradient(90deg, transparent, var(--border), transparent); margin: var(--spacing-md) 0;"></div>
+                    <div data-card-content style="color: var(--text); font-size: 1rem; line-height: 1.6;">${card.content || card.definition || ''}</div>
+                `;
+
+                // Force reflow
+                slideInCard.offsetHeight;
+
+                // Animate slide in from left
+                requestAnimationFrame(() => {
+                    slideInCard.style.setProperty('transition', 'transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1)', 'important');
+                    slideInCard.style.setProperty('transform', 'translateX(0) translateY(0) rotateZ(0deg)', 'important');
+                    slideInCard.style.setProperty('opacity', '1', 'important');
+
+                    // After animation completes, swap content to active card
+                    setTimeout(() => {
+                        studyModeState.currentIndex = newIndex;
+                        displayStudyCard();
+
+                        // Hide and reset stack card
+                        slideInCard.innerHTML = '';
+                        slideInCard.style.setProperty('opacity', '0', 'important');
+                        slideInCard.style.setProperty('transform', 'none', 'important');
+                        slideInCard.style.setProperty('z-index', '1', 'important');
+                        slideInCard.style.setProperty('transition', 'none', 'important');
+                    }, 400);
+                });
             }
-
-            // Add slide-in animation to bring the card forward from the back
-            requestAnimationFrame(() => {
-                activeCard.classList.add('slide-in-from-back');
-
-                // Clean up animation class after it completes
-                setTimeout(() => {
-                    activeCard.classList.remove('slide-in-from-back');
-                    activeCard.style.transform = '';
-                }, 400);
-            });
-        }, 400);
+        }
     }
 }
 
