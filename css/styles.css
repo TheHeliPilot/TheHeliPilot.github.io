@@ -250,6 +250,18 @@ body {
     transform: translateY(-2px);
 }
 
+.btn-warning {
+    background: #f59e0b;
+    color: white;
+    box-shadow: var(--shadow-sm);
+}
+
+.btn-warning:hover:not(:disabled) {
+    background: #d97706;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+}
+
 .btn-google {
     width: 100%;
     background: white;
@@ -691,12 +703,27 @@ select:hover,
     align-items: center;
 }
 
-/* Ensure explore search input is visible */
+/* Ensure explore search input is visible and responsive */
 #exploreSearch {
     color: var(--text-primary) !important;
     background: var(--surface-light) !important;
     border: 2px solid var(--border) !important;
     opacity: 1 !important;
+    flex: 1;
+    min-width: 200px;
+}
+
+/* On desktop, make explore filters inline */
+@media (min-width: 769px) {
+    .filter-group {
+        flex-direction: row;
+    }
+
+    #exploreCategory,
+    #exploreDifficulty {
+        min-width: 180px;
+        width: auto;
+    }
 }
 
 /* === DASHBOARD === */
@@ -2121,6 +2148,32 @@ select:hover,
     /* Filter group */
     .filter-group {
         width: 100%;
+        flex-direction: column;
+        gap: var(--spacing-sm);
+    }
+
+    /* Explore page dropdowns - full width on mobile */
+    .filter-group .select-input,
+    .filter-group select,
+    .filter-group .text-input,
+    .filter-group input[type="text"] {
+        width: 100% !important;
+        min-width: 100% !important;
+        flex: none !important;
+        padding: 0.875rem 2.5rem 0.875rem 1rem !important;
+        font-size: 1rem !important;
+        min-height: 48px;
+        box-sizing: border-box;
+    }
+
+    #exploreCategory,
+    #exploreDifficulty,
+    #exploreSearch {
+        width: 100% !important;
+        min-width: 100% !important;
+        padding: 0.875rem 2.5rem 0.875rem 1rem !important;
+        font-size: 1rem !important;
+        min-height: 48px;
     }
 
     /* Actions group - full width, ensure no overlap */
@@ -2195,11 +2248,15 @@ select:hover,
     }
 
     /* Modals */
+    .modal {
+        padding: 0.5rem !important;
+    }
+
     .modal-content {
         width: 95%;
-        max-width: 500px;
-        margin: 1rem;
-        max-height: calc(100vh - 2rem);
+        max-width: 500px !important;
+        margin: 0.5rem;
+        max-height: calc(100vh - 1rem);
         overflow-y: auto;
     }
 
@@ -2215,6 +2272,16 @@ select:hover,
 
     .modal-footer .btn {
         width: 100%;
+    }
+
+    /* Generation Progress Modal specific fixes */
+    #generationProgressModal .modal-content {
+        max-width: 95% !important;
+    }
+
+    #generationStatusLog {
+        max-height: 200px !important;
+        font-size: 0.75rem !important;
     }
 
     /* Forms */
@@ -2456,6 +2523,48 @@ select:hover,
     /* Mind Map Container - responsive height */
     #projectMindMapContainer {
         height: 400px !important;
+        min-height: 400px !important;
+    }
+
+    /* Mind Map Tooltip - mobile optimized */
+    #projectMindMapTooltip {
+        max-width: 90vw !important;
+        min-width: 0 !important;
+        padding: var(--spacing-sm) var(--spacing-md) !important;
+        font-size: 0.875rem !important;
+    }
+
+    #projectMindMapTooltip h4 {
+        font-size: 0.95rem !important;
+    }
+
+    #projectMindMapTooltip p {
+        font-size: 0.813rem !important;
+    }
+
+    /* Mind Map Instructions - show mobile version */
+    .desktop-instructions {
+        display: none !important;
+    }
+
+    .mobile-instructions {
+        display: inline !important;
+    }
+
+    #mindMapInstructions {
+        padding: var(--spacing-sm) var(--spacing-md) !important;
+        font-size: 0.813rem !important;
+    }
+
+    /* Mind Map Node text - smaller on mobile */
+    .mind-map-node text {
+        font-size: 12px !important;
+    }
+
+    /* Ensure touch targets are large enough */
+    .mind-map-node rect {
+        min-width: 44px;
+        min-height: 44px;
     }
 
     #notesEditor {
@@ -2968,15 +3077,17 @@ select:hover,
 #projectMindMapTooltip {
     position: absolute;
     background: var(--surface);
-    border: 1px solid var(--primary);
+    border: 2px solid var(--primary);
     border-radius: var(--radius-md);
     padding: var(--spacing-md);
     pointer-events: none;
     opacity: 0;
     transition: opacity var(--transition-fast);
-    max-width: 300px;
+    max-width: 600px;
+    min-width: 300px;
     z-index: 1000;
-    box-shadow: var(--shadow-lg);
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
 }
 
 #projectMindMapTooltip h4 {
@@ -3099,11 +3210,55 @@ select:hover,
         padding: var(--spacing-sm);
     }
 
+    .modal {
+        padding: 0 !important;
+    }
+
     .modal-content {
         width: 100%;
         margin: 0;
         border-radius: 0;
         max-height: 100vh;
+    }
+
+    /* Generation Progress Modal specific fixes for small screens */
+    #generationProgressModal .modal-content {
+        max-width: 100% !important;
+    }
+
+    #generationStatusLog {
+        max-height: 150px !important;
+        font-size: 0.7rem !important;
+        padding: 0.5rem !important;
+    }
+
+    /* Filter group for small phones */
+    .filter-group {
+        flex-direction: column !important;
+        gap: var(--spacing-xs) !important;
+    }
+
+    .filter-group .select-input,
+    .filter-group select,
+    .filter-group .text-input,
+    .filter-group input[type="text"] {
+        width: 100% !important;
+        min-width: 100% !important;
+        flex: none !important;
+        padding: 0.75rem 2.5rem 0.75rem 0.875rem !important;
+        font-size: 0.938rem !important;
+        min-height: 44px;
+        box-sizing: border-box;
+    }
+
+    #exploreCategory,
+    #exploreDifficulty,
+    #exploreSearch {
+        width: 100% !important;
+        min-width: 100% !important;
+        padding: 0.75rem 2.5rem 0.75rem 0.875rem !important;
+        font-size: 0.938rem !important;
+        min-height: 44px;
     }
 
     .actions-group .btn {
@@ -3220,10 +3375,40 @@ select:hover,
     /* Mind Map Stats - stack vertically on small phones */
     #mindMapTab > div:first-of-type {
         grid-template-columns: 1fr !important;
+        gap: var(--spacing-xs) !important;
     }
 
     #projectMindMapContainer {
-        height: 300px !important;
+        height: 350px !important;
+        min-height: 350px !important;
+    }
+
+    /* Mind Map Tooltip - smaller on tiny screens */
+    #projectMindMapTooltip {
+        max-width: 90vw !important;
+        min-width: 0 !important;
+        padding: var(--spacing-xs) var(--spacing-sm) !important;
+        border-width: 1px !important;
+    }
+
+    #projectMindMapTooltip h4 {
+        font-size: 0.875rem !important;
+        margin-bottom: 0.25rem !important;
+    }
+
+    #projectMindMapTooltip p {
+        font-size: 0.75rem !important;
+        line-height: 1.4 !important;
+    }
+
+    /* Mind Map Node text - even smaller on tiny screens */
+    .mind-map-node text {
+        font-size: 10px !important;
+    }
+
+    /* Stat cards - more compact on small phones */
+    #mindMapTab > div:first-of-type > div {
+        padding: var(--spacing-xs) var(--spacing-sm) !important;
     }
 
     /* Note files list on small phones */

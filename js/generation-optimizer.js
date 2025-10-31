@@ -3,10 +3,26 @@
 // High-performance parallel generation system with caching and streaming
 // ============================================================================
 
+// API Configuration
+// For local development: Set this to your local backend URL (e.g., 'http://localhost:3000/api/generate-study-cards')
+// For production: Use the deployed API URL
+const API_CONFIG = {
+    GENERATE_ENDPOINT: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? 'http://localhost:3000/api/generate-study-cards'  // Local development endpoint
+        : 'https://quizapp2-eight.vercel.app/api/generate-study-cards'  // Production endpoint
+};
+
 class GenerationOptimizer {
     constructor() {
         this.cacheVersion = '1.0';
         this.progressCallback = null;
+
+        // Warn about localhost CORS issues
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            console.warn('⚠️ Running on localhost - using local API endpoint: ' + API_CONFIG.GENERATE_ENDPOINT);
+            console.warn('⚠️ If you don\'t have a local backend running, the API calls will fail.');
+            console.warn('⚠️ To fix: Either (1) deploy your app to a server, or (2) run a local backend on port 3000');
+        }
     }
 
     // ========================================================================
@@ -138,7 +154,7 @@ class GenerationOptimizer {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 90000); // 90s timeout
 
-            const response = await fetch('https://quizapp2-eight.vercel.app/api/generate-study-cards', {
+            const response = await fetch(API_CONFIG.GENERATE_ENDPOINT, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
@@ -165,10 +181,21 @@ class GenerationOptimizer {
             };
         } catch (error) {
             console.error(`❌ Chunk ${chunkIndex + 1}/${totalChunks} failed:`, error);
+
+            // Provide more helpful error messages
+            let errorMessage = error.message;
+            if (error.name === 'AbortError') {
+                errorMessage = 'Request timed out. The server took too long to respond. Try again with less content or check your connection.';
+            } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                errorMessage = 'Network error. Check your internet connection and ensure you have access to the API server.';
+            } else if (error.message.includes('CORS')) {
+                errorMessage = 'CORS error. If running locally, please deploy the app or configure your development server properly.';
+            }
+
             return {
                 success: false,
                 chunkIndex,
-                error: error.message,
+                error: errorMessage,
                 studyCards: [],
                 testCards: []
             };
@@ -549,7 +576,14 @@ class GenerationOptimizer {
 
             // Check if all chunks failed
             if (results.every(r => !r.success)) {
-                throw new Error('All generation chunks failed. Please try again.');
+                const firstError = results.find(r => r.error)?.error || 'Unknown error';
+                throw new Error(`Generation failed: ${firstError}`);
+            }
+
+            // Warn if some chunks failed
+            const failedChunks = results.filter(r => !r.success).length;
+            if (failedChunks > 0) {
+                console.warn(`⚠️ ${failedChunks} of ${results.length} chunks failed, but continuing with successful results`);
             }
 
             // Step 4: Merge and post-process

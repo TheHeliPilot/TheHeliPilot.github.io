@@ -1326,6 +1326,9 @@ function updateIncludeStatus() {
     const icon = document.getElementById('noteIncludeIcon');
     const text = document.getElementById('noteIncludeText');
 
+    // Check if elements exist before updating them
+    if (!icon || !text) return;
+
     if (currentNoteFile.selected) {
         icon.className = 'fas fa-check-circle';
         icon.style.color = 'var(--success)';
@@ -1532,6 +1535,36 @@ async function regenerateProject() {
             return;
         }
 
+        // Check if running on localhost
+        const isLocalhost = window.location.hostname === 'localhost' ||
+                          window.location.hostname === '127.0.0.1' ||
+                          window.location.hostname.includes('localhost');
+
+        if (isLocalhost) {
+            const proceedAnyway = await new Promise((resolve) => {
+                window.confirmCancelCallback = () => {
+                    resolve(false);
+                };
+
+                window.showConfirm(
+                    'You are running on localhost. The API may not work due to CORS restrictions. For best results, please deploy your app to a server (GitHub Pages, Vercel, Netlify, etc.). Do you want to try anyway?',
+                    () => {
+                        resolve(true);
+                    },
+                    {
+                        title: 'Localhost Warning',
+                        confirmText: 'Try Anyway',
+                        confirmIcon: 'fa-exclamation-triangle',
+                        confirmClass: 'btn-warning'
+                    }
+                );
+            });
+
+            if (!proceedAnyway) {
+                return;
+            }
+        }
+
         // Check if user is Pro or Dev
         const isPro = window.isProUser || false;
         const isDev = window.isDevUser || false;
@@ -1562,9 +1595,18 @@ async function regenerateProject() {
         const progressModal = document.getElementById('generationProgressModal');
         const statusLog = document.getElementById('generationStatusLog');
         const cacheNotice = document.getElementById('cacheNotice');
+
+        // Ensure modal displays properly on mobile
+        console.log('Showing progress modal...');
         progressModal.classList.remove('hidden');
+        progressModal.style.display = 'flex';
         cacheNotice.classList.add('hidden');
         statusLog.innerHTML = '<div><i class="fas fa-spinner fa-spin" style="color: var(--primary);"></i> Starting generation...</div>';
+
+        // Reset progress bar
+        document.getElementById('generationProgressStatus').textContent = 'Initializing...';
+        document.getElementById('generationProgressPercent').textContent = '0%';
+        document.getElementById('generationProgressBar').style.width = '0%';
 
         // Disable regenerate button
         const regenerateBtn = document.getElementById('regenerateProjectBtn');
@@ -1687,11 +1729,31 @@ async function regenerateProject() {
 
     } catch (error) {
         console.error('Error regenerating project:', error);
-        showNotification('Failed to regenerate project: ' + error.message, 'error');
+
+        // Provide helpful error message
+        let errorMessage = error.message || 'Unknown error occurred';
+
+        // Add helpful tips for common issues
+        if (errorMessage.includes('Network error')) {
+            errorMessage += ' Make sure you\'re connected to the internet and the API server is accessible.';
+        } else if (errorMessage.includes('CORS')) {
+            errorMessage += ' Try deploying your app to a server instead of running it locally.';
+        } else if (errorMessage.includes('timed out')) {
+            errorMessage += ' Try reducing the amount of content or simplifying your notes.';
+        }
+
+        showNotification('Failed to regenerate: ' + errorMessage, 'error');
 
         // Hide progress modal
         const progressModal = document.getElementById('generationProgressModal');
         progressModal.classList.add('hidden');
+        progressModal.style.display = 'none';
+
+        // Hide close button
+        const closeBtn = document.getElementById('closeProgressModal');
+        if (closeBtn) {
+            closeBtn.classList.add('hidden');
+        }
 
         const regenerateBtn = document.getElementById('regenerateProjectBtn');
         if (regenerateBtn) {
@@ -1706,7 +1768,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeBtn = document.getElementById('closeProgressModal');
     if (closeBtn) {
         closeBtn.addEventListener('click', () => {
-            document.getElementById('generationProgressModal').classList.add('hidden');
+            const modal = document.getElementById('generationProgressModal');
+            modal.classList.add('hidden');
+            modal.style.display = 'none';
+            closeBtn.classList.add('hidden');
         });
     }
 });
@@ -2358,6 +2423,10 @@ function renderMindMap() {
         .scaleExtent([0.1, 4])
         .on('zoom', (event) => {
             container.attr('transform', event.transform);
+            // Update tooltip position if one is open
+            if (window.updateMindMapTooltipPosition) {
+                window.updateMindMapTooltipPosition();
+            }
         });
 
     svg.call(zoom);
@@ -2498,8 +2567,89 @@ function renderMindMap() {
         .attr('fill', 'transparent')
         .style('cursor', 'pointer');
 
-    // Hover and click effects
-    nodeGroups.on('mouseenter', function(event, d) {
+    // Track currently open tooltip
+    let currentOpenTooltip = null;
+    let currentTooltipNode = null;
+
+    // Function to update tooltip position
+    const updateTooltipPosition = () => {
+        if (!currentTooltipNode || !tooltip || currentOpenTooltip === null) return;
+
+        // Get tooltip dimensions
+        const tooltipWidth = tooltip.offsetWidth || 300;
+        const tooltipHeight = tooltip.offsetHeight || 100;
+
+        // Get container dimensions
+        const containerRect = mindMapContainer.getBoundingClientRect();
+        const containerWidth = containerRect.width;
+        const containerHeight = containerRect.height;
+
+        // Always position tooltip at the bottom center of the container
+        const padding = 10;
+        const left = (containerWidth - tooltipWidth) / 2;
+        const top = containerHeight - tooltipHeight - padding;
+
+        tooltip.style.left = Math.max(padding, left) + 'px';
+        tooltip.style.top = Math.max(padding, top) + 'px';
+    };
+
+    // Make updateTooltipPosition available globally for zoom handler
+    window.updateMindMapTooltipPosition = updateTooltipPosition;
+
+    // Detect if device supports touch
+    const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+    // Click/Tap to show tooltip
+    nodeGroups.on('click', function(event, d) {
+        event.stopPropagation();
+
+        // On touch devices or click, toggle tooltip
+        if (currentOpenTooltip === d.id && isTouchDevice) {
+            // Close if already open (for touch devices)
+            if (tooltip) {
+                tooltip.style.opacity = '0';
+                tooltip.style.visibility = 'hidden';
+            }
+            currentOpenTooltip = null;
+            currentTooltipNode = null;
+        } else {
+            // Open tooltip
+            currentOpenTooltip = d.id;
+            currentTooltipNode = d;
+
+            if (tooltip) {
+                tooltip.querySelector('h4').textContent = d.name;
+                tooltip.querySelector('p').textContent = d.definition || 'No description';
+                tooltip.style.opacity = '1';
+                tooltip.style.visibility = 'visible';
+
+                setTimeout(() => {
+                    updateTooltipPosition();
+                }, 10);
+            }
+        }
+    })
+    .on('mouseenter', function(event, d) {
+        // Only show tooltip on hover for non-touch devices
+        if (isTouchDevice) {
+            // Just highlight on touch devices, don't show tooltip
+            const nodeColor = d.color || '#667eea';
+
+            d3.select(this).select('.main-rect')
+                .transition()
+                .duration(200)
+                .attr('stroke', nodeColor)
+                .attr('stroke-width', 3)
+                .attr('stroke-opacity', 0.9);
+
+            d3.select(this).select('.inner-glow')
+                .transition()
+                .duration(200)
+                .attr('opacity', 0.15);
+            return;
+        }
+
+        // Highlight and show tooltip on hover (desktop only)
         const nodeColor = d.color || '#667eea';
 
         d3.select(this).select('.main-rect')
@@ -2514,21 +2664,27 @@ function renderMindMap() {
             .duration(200)
             .attr('opacity', 0.15);
 
+        // Show tooltip on hover
+        currentOpenTooltip = d.id;
+        currentTooltipNode = d;
+
         if (tooltip) {
+            // Set tooltip content
             tooltip.querySelector('h4').textContent = d.name;
             tooltip.querySelector('p').textContent = d.definition || 'No description';
+
+            // Show tooltip
             tooltip.style.opacity = '1';
             tooltip.style.visibility = 'visible';
-        }
-    })
-    .on('mousemove', function(event) {
-        if (tooltip) {
-            const rect = mindMapContainer.getBoundingClientRect();
-            tooltip.style.left = (event.clientX - rect.left + 15) + 'px';
-            tooltip.style.top = (event.clientY - rect.top + 15) + 'px';
+
+            // Position tooltip after content is set
+            setTimeout(() => {
+                updateTooltipPosition();
+            }, 10);
         }
     })
     .on('mouseleave', function(event, d) {
+        // Reset highlight on leave
         d3.select(this).select('.main-rect')
             .transition()
             .duration(200)
@@ -2541,15 +2697,26 @@ function renderMindMap() {
             .duration(200)
             .attr('opacity', 0.08);
 
-        if (tooltip) {
-            tooltip.style.opacity = '0';
-            tooltip.style.visibility = 'hidden';
+        // Hide tooltip when leaving the node (desktop only)
+        if (!isTouchDevice) {
+            if (tooltip) {
+                tooltip.style.opacity = '0';
+                tooltip.style.visibility = 'hidden';
+            }
+            currentOpenTooltip = null;
+            currentTooltipNode = null;
         }
-    })
-    .on('click', function(event, d) {
-        event.stopPropagation();
-        if (d.id !== undefined) {
-            showMindMapColorPicker(event, d.id);
+    });
+
+    // Close tooltip when clicking on background
+    svg.on('click', function(event) {
+        // Only close if clicking on the SVG background, not on nodes
+        if (event.target === svg.node() || event.target.tagName === 'rect') {
+            if (tooltip && !event.target.closest('.mind-map-node')) {
+                tooltip.style.opacity = '0';
+                tooltip.style.visibility = 'hidden';
+                currentOpenTooltip = null;
+            }
         }
     });
 }

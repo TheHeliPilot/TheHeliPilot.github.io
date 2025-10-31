@@ -386,17 +386,17 @@
                             <div id="weakCount" style="font-size: 1.5rem; font-weight: 600; color: #ff6b6b;">0</div>
                         </div>
                     </div>
-                    <div style="margin-bottom: var(--spacing-md); padding: var(--spacing-md); background: var(--surface-light); border-radius: var(--radius-md); display: flex; gap: var(--spacing-md); align-items: center;">
+                    <div id="mindMapInstructions" style="margin-bottom: var(--spacing-md); padding: var(--spacing-md); background: var(--surface-light); border-radius: var(--radius-md); display: flex; gap: var(--spacing-md); align-items: center;">
                         <i class="fas fa-info-circle" style="color: var(--primary);"></i>
                         <span style="color: var(--text-secondary); font-size: 0.875rem;">
-                            <strong>Interactive Map:</strong> Colored borders show mastery level • Scroll to zoom • Drag nodes or background • Hover for details
+                            <strong>Interactive Map:</strong> <span class="desktop-instructions">Colored borders show mastery level • Scroll to zoom • Drag to pan • Hover or Tap nodes to view description</span><span class="mobile-instructions" style="display: none;">Pinch to zoom • Drag to pan • Tap nodes to view details</span>
                         </span>
                     </div>
                     <div id="projectMindMapContainer" style="width: 100%; height: calc(100vh - 380px); background: var(--background); border: 1px solid var(--border); border-radius: var(--radius-lg); position: relative;">
                         <svg id="projectMindMapSvg" style="width: 100%; height: 100%;"></svg>
-                        <div id="projectMindMapTooltip" style="position: absolute; padding: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-xl); pointer-events: none; opacity: 0; transition: opacity 0.2s; max-width: 400px; z-index: 1000;">
-                            <h4 style="margin: 0 0 0.5rem 0; color: var(--primary);"></h4>
-                            <p style="margin: 0; color: var(--text-secondary);"></p>
+                        <div id="projectMindMapTooltip" style="position: absolute; padding: 1rem; background: var(--surface); border: 2px solid var(--primary); border-radius: var(--radius-md); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7); pointer-events: none; opacity: 0; transition: opacity 0.2s; max-width: 400px; z-index: 1000; backdrop-filter: blur(8px);">
+                            <h4 style="margin: 0 0 0.5rem 0; color: var(--primary); font-size: 1rem; font-weight: 600;"></h4>
+                            <p style="margin: 0; color: var(--text-primary); font-size: 0.875rem; line-height: 1.5;"></p>
                         </div>
                     </div>
                 </div>
@@ -884,7 +884,7 @@
                             <option value="hard">Hard</option>
                             <option value="mixed">Mixed</option>
                         </select>
-                        <input type="text" id="exploreSearch" class="text-input" placeholder="Search quizzes..." style="flex: 1; min-width: 200px;">
+                        <input type="text" id="exploreSearch" class="text-input" placeholder="Search quizzes...">
                     </div>
                 </div>
                 <div id="publicProjectsList" class="projects-grid">
@@ -1605,9 +1605,9 @@
                 <div class="form-group">
                     <label>Difficulty</label>
                     <select id="testCardDifficulty" class="select-input">
-                        <option value="easy">◯ Easy</option>
-                        <option value="medium" selected>◉ Medium</option>
-                        <option value="hard">⬤ Hard</option>
+                        <option value="easy">Easy</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="hard">Hard</option>
                     </select>
                 </div>
             </div>
