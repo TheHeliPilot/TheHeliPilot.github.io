@@ -536,19 +536,23 @@ select:hover,
 /* === SIDEBAR - Modern Dark Design === */
 .sidebar {
     width: 260px;
+    height: 100vh;
     background: var(--surface);
     border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
-    padding: var(--spacing-md) 0;
+    padding: 0;
     box-shadow: 2px 0 16px rgba(0, 0, 0, 0.3);
+    position: sticky;
+    top: 0;
 }
 
 .sidebar-header {
     padding: var(--spacing-lg) var(--spacing-lg);
     border-bottom: 1px solid var(--border);
     margin-bottom: 0;
+    flex-shrink: 0;
 }
 
 .logo {
@@ -572,6 +576,24 @@ select:hover,
     flex-direction: column;
     gap: var(--spacing-md);
     overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.sidebar-nav::-webkit-scrollbar {
+    width: 6px;
+}
+
+.sidebar-nav::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb:hover {
+    background: var(--primary);
 }
 
 .nav-section {
@@ -630,6 +652,8 @@ select:hover,
     padding: var(--spacing-lg);
     border-top: 1px solid var(--border);
     margin-top: auto;
+    flex-shrink: 0;
+    background: var(--surface);
 }
 
 /* === MAIN CONTENT === */
@@ -2165,12 +2189,14 @@ select:hover,
     .notes-toolbar {
         flex-wrap: wrap;
         gap: var(--spacing-sm);
+        align-items: flex-start;
     }
 
     .notes-toolbar-left,
     .notes-toolbar-right {
         flex-wrap: wrap;
-        width: 100%;
+        width: auto;
+        min-width: 0;
     }
 
     .notes-toolbar-left {
@@ -2180,11 +2206,13 @@ select:hover,
     .notes-toolbar .btn {
         flex-shrink: 0;
         white-space: nowrap;
+        min-width: fit-content;
     }
 
     #generationLanguage {
         min-width: 120px;
         max-width: 150px;
+        flex-shrink: 1;
     }
 
     #noteFilesList {
@@ -2206,8 +2234,8 @@ select:hover,
     }
 }
 
-/* Smaller screens - stack toolbar buttons (max-width: 900px) */
-@media (max-width: 900px) {
+/* Smaller screens - stack toolbar buttons (max-width: 1100px) */
+@media (max-width: 1100px) {
     .notes-toolbar {
         flex-direction: column;
         align-items: stretch;
@@ -2226,6 +2254,7 @@ select:hover,
 
     .notes-toolbar .btn {
         min-width: 100px;
+        flex-shrink: 0;
     }
 
     #generationLanguage {
@@ -3008,6 +3037,7 @@ select:hover,
     display: flex;
     gap: var(--spacing-md);
     align-items: center;
+    flex-wrap: wrap;
 }
 
 .notes-toolbar-right {
