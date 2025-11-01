@@ -1951,18 +1951,20 @@ function initMobileMenu() {
         backdrop.classList.add('active');
     });
 
-    // Close sidebar when backdrop is clicked
-    backdrop.addEventListener('click', () => {
+    // Close sidebar function
+    const closeSidebar = () => {
         sidebar.classList.remove('open');
         backdrop.classList.remove('active');
-    });
+    };
+
+    // Close sidebar when backdrop is clicked
+    backdrop.addEventListener('click', closeSidebar);
 
     // Close sidebar when nav link is clicked (mobile)
     navLinks.forEach(link => {
         link.addEventListener('click', () => {
             if (window.innerWidth <= 768) {
-                sidebar.classList.remove('open');
-                backdrop.classList.remove('active');
+                closeSidebar();
             }
         });
     });
