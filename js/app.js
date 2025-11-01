@@ -1949,12 +1949,24 @@ function initMobileMenu() {
     menuToggle.addEventListener('click', () => {
         sidebar.classList.add('open');
         backdrop.classList.add('active');
+        // Prevent body scroll on mobile
+        if (window.innerWidth <= 768) {
+            document.body.style.overflow = 'hidden';
+            document.body.style.position = 'fixed';
+            document.body.style.width = '100%';
+        }
     });
 
     // Close sidebar function
     const closeSidebar = () => {
         sidebar.classList.remove('open');
         backdrop.classList.remove('active');
+        // Restore body scroll
+        if (window.innerWidth <= 768) {
+            document.body.style.overflow = '';
+            document.body.style.position = '';
+            document.body.style.width = '';
+        }
     };
 
     // Close sidebar when backdrop is clicked

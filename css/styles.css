@@ -2161,13 +2161,6 @@ select:hover,
     pointer-events: all;
 }
 
-@media (max-width: 768px) {
-    .sidebar-backdrop.active {
-        left: 260px;
-        width: calc(100% - 260px);
-    }
-}
-
 /* === RESPONSIVE BREAKPOINTS === */
 
 /* Tablet (768px - 1024px) */
