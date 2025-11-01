@@ -13,7 +13,7 @@
 <body>
     <!-- Authentication Page -->
     <div id="authPage" class="auth-page">
-        <div class="auth-container">In
+        <div class="auth-container">
             <div class="auth-box">
                 <div class="auth-logo">
                     <i class="fas fa-graduation-cap"></i>
@@ -871,10 +871,18 @@
                     <div class="filter-group">
                         <select id="exploreCategory" class="select-input">
                             <option value="all">All Categories</option>
+                            <option value="coding">Coding</option>
                             <option value="science">Science</option>
                             <option value="math">Math</option>
                             <option value="history">History</option>
                             <option value="language">Language</option>
+                            <option value="geography">Geography</option>
+                            <option value="art">Art & Design</option>
+                            <option value="business">Business</option>
+                            <option value="technology">Technology</option>
+                            <option value="health">Health & Fitness</option>
+                            <option value="music">Music</option>
+                            <option value="literature">Literature</option>
                             <option value="other">Other</option>
                         </select>
                         <select id="exploreDifficulty" class="select-input">
@@ -1048,6 +1056,22 @@
                             <div style="background: var(--surface); padding: 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border);">
                                 <h4 style="margin-bottom: 1rem; color: var(--text-primary);">Daily Streaks</h4>
                                 <canvas id="streaksChart"></canvas>
+                            </div>
+                            <div style="background: var(--surface); padding: 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border);">
+                                <h4 style="margin-bottom: 1rem; color: var(--text-primary);">User Registrations (Last 30 Days)</h4>
+                                <canvas id="registrationChart"></canvas>
+                            </div>
+                            <div style="background: var(--surface); padding: 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border);">
+                                <h4 style="margin-bottom: 1rem; color: var(--text-primary);">Project Categories</h4>
+                                <canvas id="categoriesChart"></canvas>
+                            </div>
+                            <div style="background: var(--surface); padding: 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border);">
+                                <h4 style="margin-bottom: 1rem; color: var(--text-primary);">User Engagement</h4>
+                                <canvas id="engagementChart"></canvas>
+                            </div>
+                            <div style="background: var(--surface); padding: 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border);">
+                                <h4 style="margin-bottom: 1rem; color: var(--text-primary);">Average Quiz Performance</h4>
+                                <canvas id="performanceChart"></canvas>
                             </div>
                         </div>
                     </div>
@@ -1369,10 +1393,18 @@
                 <div class="form-group">
                     <label>Category</label>
                     <select id="publicProjectCategory" class="select-input">
+                        <option value="coding">Coding</option>
                         <option value="science">Science</option>
                         <option value="math">Math</option>
                         <option value="history">History</option>
                         <option value="language">Language</option>
+                        <option value="geography">Geography</option>
+                        <option value="art">Art & Design</option>
+                        <option value="business">Business</option>
+                        <option value="technology">Technology</option>
+                        <option value="health">Health & Fitness</option>
+                        <option value="music">Music</option>
+                        <option value="literature">Literature</option>
                         <option value="other">Other</option>
                     </select>
                 </div>

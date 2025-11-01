@@ -1921,6 +1921,11 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+function hexToRgb(hex) {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : '124, 133, 145';
+}
+
 function shuffleArray(array) {
     const shuffled = [...array];
     for (let i = shuffled.length - 1; i > 0; i--) {
@@ -2003,6 +2008,25 @@ async function loadPublicProjects() {
     }
 }
 
+function getCategoryColor(category) {
+    const categoryColors = {
+        'coding': '#1db954',          // Green
+        'science': '#5fa8ff',         // Blue
+        'math': '#ff6b9d',            // Pink
+        'history': '#d4a574',         // Brown/Gold
+        'language': '#9d4edd',        // Purple
+        'geography': '#4ecdc4',       // Teal
+        'art': '#ff9671',             // Coral
+        'business': '#ffd93d',        // Yellow
+        'technology': '#6c5ce7',      // Indigo
+        'health': '#00b894',          // Emerald
+        'music': '#fd79a8',           // Light Pink
+        'literature': '#a29bfe',      // Lavender
+        'other': '#7c8591'            // Gray
+    };
+    return categoryColors[category] || '#7c8591';
+}
+
 function renderExplore() {
     const list = document.getElementById('publicProjectsList');
     const category = document.getElementById('exploreCategory').value;
@@ -2019,8 +2043,11 @@ function renderExplore() {
         return;
     }
 
-    list.innerHTML = filtered.map(p => `
-        <div class="project-card public-project-card" style="border-left-color: #9d4edd;">
+    list.innerHTML = filtered.map(p => {
+        const categoryColor = getCategoryColor(p.category);
+        const categoryColorRgb = hexToRgb(categoryColor);
+        return `
+        <div class="project-card public-project-card" style="border-left-color: ${categoryColor};">
             <div class="project-header">
                 <div>
                     <div class="project-title">${escapeHtml(p.name)}</div>
@@ -2030,13 +2057,14 @@ function renderExplore() {
             <p style="color: var(--text-secondary); margin-top: 0.5rem;">${escapeHtml(p.description || '')}</p>
             <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap;">
                 ${getDifficultyBadge(p.difficulty)}
-                <span style="padding: 0.25rem 0.5rem; background: rgba(157, 78, 221, 0.15); color: #9d4edd; border-radius: 6px; font-size: 0.75rem;">${p.category}</span>
+                <span style="padding: 0.25rem 0.5rem; background: rgba(${categoryColorRgb}, 0.15); color: ${categoryColor}; border: 1px solid ${categoryColor}; border-radius: 6px; font-size: 0.75rem; font-weight: 600;">${(p.category || 'Other').charAt(0).toUpperCase() + (p.category || 'other').slice(1)}</span>
             </div>
             <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
                 <button class="btn btn-primary" onclick="window.startPublicQuiz('${p.id}')"><i class="fas fa-play"></i> Take Quiz</button>
             </div>
         </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 function initExplore() {
@@ -2065,8 +2093,10 @@ async function loadDevProjects() {
             return;
         }
 
-        list.innerHTML = userProjects.map(p => `
-            <div class="project-card" style="border-left-color: #9d4edd;">
+        list.innerHTML = userProjects.map(p => {
+            const categoryColor = getCategoryColor(p.category);
+            return `
+            <div class="project-card" style="border-left-color: ${categoryColor};">
                 <div class="project-header">
                     <div>
                         <div class="project-title">${escapeHtml(p.name)} ${p.published ? '✓' : '(Draft)'}</div>
@@ -2086,7 +2116,8 @@ async function loadDevProjects() {
                     </button>
                 </div>
             </div>
-        `).join('');
+            `;
+        }).join('');
     } catch (error) {
         console.error('Error loading dev projects:', error);
     }
@@ -2153,6 +2184,8 @@ function initDevDashboard() {
 
                 closeModal('publicProjectModal');
                 await loadPublicProjects();
+                if (isDevUser || isAdminUser) await loadDevProjects();
+                if (isAdminUser) await loadProjectsManagement();
             } catch (error) {
                 console.error('Error saving public project:', error);
                 showNotification('Error saving project', 'error');
@@ -2197,6 +2230,8 @@ window.togglePublish = async function(id, publish) {
         await update(ref(window.db, `publicProjects/${id}`), { published: publish });
         showNotification(publish ? 'Project published!' : 'Project unpublished', 'success');
         await loadPublicProjects();
+        if (isDevUser || isAdminUser) await loadDevProjects();
+        if (isAdminUser) await loadProjectsManagement();
     } catch (error) {
         showNotification('Error updating project', 'error');
     }
@@ -2211,22 +2246,36 @@ window.deletePublicProject = async function(id) {
         return;
     }
 
-    const confirmed = await showConfirmDialog(
-        'Delete Public Project',
+    showConfirm(
         `Are you sure you want to delete "${project?.name || 'this project'}"? This will permanently delete the project and all its cards. This action cannot be undone.`,
-        'Delete Project'
+        async () => {
+            try {
+                // Delete the project (which includes cards as nested data)
+                await remove(ref(window.db, `publicProjects/${id}`));
+
+                // Try to delete results, but don't fail if it doesn't exist
+                try {
+                    await remove(ref(window.db, `publicProjectResults/${id}`));
+                } catch (e) {
+                    console.log('No results to delete or permission issue:', e);
+                }
+
+                showNotification('Project deleted', 'success');
+                await loadPublicProjects();
+                if (isDevUser || isAdminUser) await loadDevProjects();
+                if (isAdminUser) await loadProjectsManagement();
+            } catch (error) {
+                console.error('Error deleting project:', error);
+                showNotification('Error deleting project: ' + error.message, 'error');
+            }
+        },
+        {
+            title: 'Delete Public Project',
+            confirmText: 'Delete Project',
+            confirmIcon: 'fa-trash',
+            confirmClass: 'btn-danger'
+        }
     );
-
-    if (!confirmed) return;
-
-    try {
-        await remove(ref(window.db, `publicProjects/${id}`));
-        await remove(ref(window.db, `publicProjectResults/${id}`));
-        showNotification('Project deleted', 'success');
-        await loadPublicProjects();
-    } catch (error) {
-        showNotification('Error deleting project', 'error');
-    }
 };
 
 // ============================================
@@ -2465,22 +2514,25 @@ window.deletePublicCard = async function(cardId) {
         return;
     }
 
-    const confirmed = await showConfirmDialog(
-        'Delete Card',
+    showConfirm(
         'Are you sure you want to delete this quiz question? This action cannot be undone.',
-        'Delete Card'
+        async () => {
+            try {
+                await remove(ref(window.db, `publicProjects/${currentPublicProjectId}/cards/${cardId}`));
+                showNotification('Card deleted', 'success');
+                await loadPublicProjectCards(currentPublicProjectId);
+            } catch (error) {
+                console.error('Error deleting card:', error);
+                showNotification('Error deleting card', 'error');
+            }
+        },
+        {
+            title: 'Delete Card',
+            confirmText: 'Delete Card',
+            confirmIcon: 'fa-trash',
+            confirmClass: 'btn-danger'
+        }
     );
-
-    if (!confirmed) return;
-
-    try {
-        await remove(ref(window.db, `publicProjects/${currentPublicProjectId}/cards/${cardId}`));
-        showNotification('Card deleted', 'success');
-        await loadPublicProjectCards(currentPublicProjectId);
-    } catch (error) {
-        console.error('Error deleting card:', error);
-        showNotification('Error deleting card', 'error');
-    }
 };
 
 // ============================================
@@ -3146,6 +3198,7 @@ async function loadAdminAnalytics() {
     try {
         console.log('Loading admin analytics for user:', currentUser.uid);
 
+        // Load users data
         const usersSnapshot = await get(ref(window.db, 'users'));
 
         if (!usersSnapshot.exists()) {
@@ -3155,6 +3208,17 @@ async function loadAdminAnalytics() {
 
         const users = Object.values(usersSnapshot.val());
         console.log('Loaded', users.length, 'users');
+
+        // Load public projects data
+        const publicProjectsSnapshot = await get(ref(window.db, 'publicProjects'));
+        if (publicProjectsSnapshot.exists()) {
+            const data = publicProjectsSnapshot.val();
+            publicProjects = Object.keys(data).map(key => ({ id: key, ...data[key] }));
+            console.log('Loaded', publicProjects.length, 'public projects');
+        } else {
+            publicProjects = [];
+            console.log('No public projects found');
+        }
 
         // Calculate stats
         const totalQuizAttempts = publicProjects.reduce((sum, p) => sum + (p.totalAttempts || 0), 0);
@@ -3236,15 +3300,14 @@ async function loadAnalyticsCharts(users) {
     if (userTypeCanvas) {
         const freeUsers = users.filter(u => !u.isPro && !u.isDev).length;
         const proUsers = users.filter(u => u.isPro).length;
-        const devUsers = users.filter(u => u.isDev).length;
 
         analyticsCharts.userType = new Chart(userTypeCanvas, {
             type: 'doughnut',
             data: {
-                labels: ['Free', 'Pro', 'Dev'],
+                labels: ['Free', 'Pro'],
                 datasets: [{
-                    data: [freeUsers, proUsers, devUsers],
-                    backgroundColor: ['#7c8591', '#ffd700', '#9d4edd']
+                    data: [freeUsers, proUsers],
+                    backgroundColor: ['#7c8591', '#ffd700']
                 }]
             },
             options: {
@@ -3259,26 +3322,43 @@ async function loadAnalyticsCharts(users) {
     // Top Public Projects
     const topProjectsCanvas = document.getElementById('topProjectsChart');
     if (topProjectsCanvas) {
-        const topProjects = publicProjects
-            .filter(p => p.published)
+        const topProjects = (publicProjects || [])
+            .filter(p => p.published && p.totalAttempts > 0)
             .sort((a, b) => (b.totalAttempts || 0) - (a.totalAttempts || 0))
             .slice(0, 5);
+
+        // Ensure we have data to display
+        const chartLabels = topProjects.length > 0
+            ? topProjects.map(p => p.name.length > 20 ? p.name.substring(0, 20) + '...' : p.name)
+            : ['No Data'];
+
+        const chartData = topProjects.length > 0
+            ? topProjects.map(p => p.totalAttempts || 0)
+            : [0];
 
         analyticsCharts.topProjects = new Chart(topProjectsCanvas, {
             type: 'bar',
             data: {
-                labels: topProjects.map(p => p.name.length > 20 ? p.name.substring(0, 20) + '...' : p.name),
+                labels: chartLabels,
                 datasets: [{
                     label: 'Attempts',
-                    data: topProjects.map(p => p.totalAttempts || 0),
+                    data: chartData,
                     backgroundColor: '#9d4edd'
                 }]
             },
             options: {
                 responsive: true,
-                plugins: { legend: { display: false } },
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { display: false },
+                    title: {
+                        display: topProjects.length === 0,
+                        text: 'No projects with attempts yet',
+                        color: '#9da7b3'
+                    }
+                },
                 scales: {
-                    y: { beginAtZero: true, ticks: { color: '#9da7b3' }, grid: { color: '#3c4652' } },
+                    y: { beginAtZero: true, ticks: { color: '#9da7b3', stepSize: 1 }, grid: { color: '#3c4652' } },
                     x: { ticks: { color: '#9da7b3' }, grid: { display: false } }
                 }
             }
@@ -3307,6 +3387,148 @@ async function loadAnalyticsCharts(users) {
                     label: 'Users',
                     data: Object.values(streakRanges),
                     backgroundColor: '#ffad66'
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true, ticks: { color: '#9da7b3' }, grid: { color: '#3c4652' } },
+                    x: { ticks: { color: '#9da7b3' }, grid: { display: false } }
+                }
+            }
+        });
+    }
+
+    // User Registrations (Last 30 Days)
+    const registrationCanvas = document.getElementById('registrationChart');
+    if (registrationCanvas) {
+        const last30Days = Array.from({length: 30}, (_, i) => {
+            const date = new Date();
+            date.setDate(date.getDate() - (29 - i));
+            return date.toISOString().split('T')[0];
+        });
+
+        const registrationData = last30Days.map(date => {
+            return users.filter(u => u.createdAt && u.createdAt.startsWith(date)).length;
+        });
+
+        analyticsCharts.registration = new Chart(registrationCanvas, {
+            type: 'line',
+            data: {
+                labels: last30Days.map((d, i) => i % 5 === 0 ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''),
+                datasets: [{
+                    label: 'New Users',
+                    data: registrationData,
+                    borderColor: '#5fa8ff',
+                    backgroundColor: 'rgba(95, 168, 255, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true, ticks: { color: '#9da7b3', stepSize: 1 }, grid: { color: '#3c4652' } },
+                    x: { ticks: { color: '#9da7b3' }, grid: { display: false } }
+                }
+            }
+        });
+    }
+
+    // Project Categories Distribution
+    const categoriesCanvas = document.getElementById('categoriesChart');
+    if (categoriesCanvas) {
+        const categoryCount = {};
+        publicProjects.forEach(p => {
+            const category = p.category || 'Other';
+            categoryCount[category] = (categoryCount[category] || 0) + 1;
+        });
+
+        const sortedCategories = Object.entries(categoryCount)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 6);
+
+        analyticsCharts.categories = new Chart(categoriesCanvas, {
+            type: 'doughnut',
+            data: {
+                labels: sortedCategories.map(([name]) => name),
+                datasets: [{
+                    data: sortedCategories.map(([, count]) => count),
+                    backgroundColor: ['#1db954', '#5fa8ff', '#ffad66', '#9d4edd', '#ff5c5c', '#7c8591']
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { labels: { color: '#9da7b3' } }
+                }
+            }
+        });
+    }
+
+    // User Engagement (Active vs Inactive)
+    const engagementCanvas = document.getElementById('engagementChart');
+    if (engagementCanvas) {
+        const now = new Date();
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+        const activeUsers = users.filter(u => {
+            const lastLogin = u.streak?.lastLoginDate ? new Date(u.streak.lastLoginDate) : null;
+            return lastLogin && lastLogin >= sevenDaysAgo;
+        }).length;
+
+        const recentUsers = users.filter(u => {
+            const lastLogin = u.streak?.lastLoginDate ? new Date(u.streak.lastLoginDate) : null;
+            return lastLogin && lastLogin >= thirtyDaysAgo && lastLogin < sevenDaysAgo;
+        }).length;
+
+        const inactiveUsers = users.length - activeUsers - recentUsers;
+
+        analyticsCharts.engagement = new Chart(engagementCanvas, {
+            type: 'pie',
+            data: {
+                labels: ['Active (7 days)', 'Recent (30 days)', 'Inactive'],
+                datasets: [{
+                    data: [activeUsers, recentUsers, inactiveUsers],
+                    backgroundColor: ['#1db954', '#ffad66', '#7c8591']
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { labels: { color: '#9da7b3' } }
+                }
+            }
+        });
+    }
+
+    // Average Quiz Performance
+    const performanceCanvas = document.getElementById('performanceChart');
+    if (performanceCanvas) {
+        const performanceRanges = { '0-20%': 0, '21-40%': 0, '41-60%': 0, '61-80%': 0, '81-100%': 0 };
+
+        publicProjects.forEach(p => {
+            if (p.totalAttempts && p.totalAttempts > 0) {
+                const avgScore = (p.totalScore || 0) / p.totalAttempts;
+                if (avgScore <= 20) performanceRanges['0-20%']++;
+                else if (avgScore <= 40) performanceRanges['21-40%']++;
+                else if (avgScore <= 60) performanceRanges['41-60%']++;
+                else if (avgScore <= 80) performanceRanges['61-80%']++;
+                else performanceRanges['81-100%']++;
+            }
+        });
+
+        analyticsCharts.performance = new Chart(performanceCanvas, {
+            type: 'bar',
+            data: {
+                labels: Object.keys(performanceRanges),
+                datasets: [{
+                    label: 'Projects',
+                    data: Object.values(performanceRanges),
+                    backgroundColor: '#1db954'
                 }]
             },
             options: {
