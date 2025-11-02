@@ -220,11 +220,9 @@ function initNavigation() {
             if (pageName === 'explore') loadPublicProjects();
             if (pageName === 'leaderboard') {
                 (async () => {
-                    await loadPublicProjects(); // Need this for global leaderboard
                     const usersSnapshot = await get(ref(window.db, 'users'));
                     const users = usersSnapshot.exists() ? Object.entries(usersSnapshot.val()).map(([uid, data]) => ({ uid, ...data })) : [];
                     await loadTopStreaksLeaderboard(users);
-                    await loadGlobalLeaderboard();
                 })();
             }
             if (pageName === 'dev') loadPublicProjects();
@@ -3258,7 +3256,6 @@ async function loadAdminAnalytics() {
 
         // Load leaderboards
         await loadTopStreaksLeaderboard(users);
-        await loadGlobalLeaderboard();
 
         console.log('Analytics loaded successfully');
     } catch (error) {
