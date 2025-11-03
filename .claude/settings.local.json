@@ -11,7 +11,8 @@
       "Bash(node check-html.js:*)",
       "Bash(move:*)",
       "Bash(node check-html.cjs:*)",
-      "Bash(ren check-html.js check-html.cjs)"
+      "Bash(ren check-html.js check-html.cjs)",
+      "Bash(node:*)"
     ],
     "deny": [],
     "ask": []

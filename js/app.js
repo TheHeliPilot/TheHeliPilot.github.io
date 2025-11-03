@@ -2619,6 +2619,13 @@ function showPublicQuestion() {
     const card = currentPublicQuiz.cards[currentPublicQuiz.currentIndex];
     const content = document.getElementById('publicQuizPageContent');
 
+    // Shuffle answer options each time the question is shown
+    const answerIndices = card.options.map((_, idx) => idx);
+    const shuffledIndices = shuffleArray(answerIndices);
+
+    // Store the shuffled mapping for later validation
+    card.shuffledAnswerMap = shuffledIndices;
+
     content.innerHTML = `
         <div class="test-header">
             <div class="test-progress">Question ${currentPublicQuiz.currentIndex + 1} of ${currentPublicQuiz.cards.length}</div>
@@ -2627,19 +2634,19 @@ function showPublicQuestion() {
         <div class="test-card">
             <div class="question-text">${escapeHtml(card.question)}</div>
             <div class="answers-list" id="publicAnswersList">
-                ${card.options.map((opt, idx) => `
-                    <button class="answer-btn" onclick="window.selectPublicAnswer(${idx})">
-                        <div class="answer-letter">${String.fromCharCode(65 + idx)}</div>
-                        <div>${escapeHtml(opt)}</div>
+                ${shuffledIndices.map((originalIdx, displayIdx) => `
+                    <button class="answer-btn" onclick="window.selectPublicAnswer(${displayIdx})">
+                        <div class="answer-letter">${String.fromCharCode(65 + displayIdx)}</div>
+                        <div>${escapeHtml(card.options[originalIdx])}</div>
                     </button>
                 `).join('')}
             </div>
             <div class="feedback hidden" id="publicFeedback"></div>
-            <div class="test-actions" style="position: relative; display: flex; justify-content: center; align-items: center; min-height: 48px;">
+            <div class="test-actions" style="display: flex; gap: 0.75rem; justify-content: center; align-items: center; flex-wrap: wrap; min-height: 48px;">
                 <button id="nextPublicQuestionBtn" class="btn btn-primary hidden" onclick="window.nextPublicQuestion()">
                     <i class="fas fa-arrow-right"></i> Next Question
                 </button>
-                <button class="btn btn-primary" onclick="window.exitPublicQuiz()" style="position: absolute; right: 0; background: var(--danger); border-color: var(--danger);">
+                <button class="btn btn-primary" onclick="window.exitPublicQuiz()" style="background: var(--danger); border-color: var(--danger);">
                     <i class="fas fa-sign-out-alt"></i> Exit Test
                 </button>
             </div>
@@ -2660,10 +2667,13 @@ window.selectPublicAnswer = async function(selectedIdx) {
     feedback.innerHTML = '<div class="spinner" style="width: 20px; height: 20px;"></div>';
 
     try {
+        // Map the displayed answer index back to the original index
+        const originalAnswerIdx = card.shuffledAnswerMap[selectedIdx];
+
         const payload = {
             projectId: currentPublicQuiz.projectId,
             cardId: card.id,
-            selectedAnswer: selectedIdx
+            selectedAnswer: originalAnswerIdx
         };
         console.log('Validating answer with payload:', payload);
         console.log('Current card:', card);
@@ -2688,13 +2698,16 @@ window.selectPublicAnswer = async function(selectedIdx) {
         // Store answer
         currentPublicQuiz.answers.push({
             cardId: card.id,
-            selectedAnswer: selectedIdx,
+            selectedAnswer: originalAnswerIdx,
             isCorrect
         });
 
+        // Map the correct answer from original index to displayed index
+        const displayedCorrectIdx = card.shuffledAnswerMap.indexOf(result.correctAnswer);
+
         // Show correct/incorrect styling
         buttons.forEach((btn, idx) => {
-            if (idx === result.correctAnswer) btn.classList.add('correct');
+            if (idx === displayedCorrectIdx) btn.classList.add('correct');
             else if (idx === selectedIdx && !isCorrect) btn.classList.add('incorrect');
         });
 
