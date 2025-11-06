@@ -1801,10 +1801,14 @@ function initModals() {
 
 window.openModal = function(modalId) {
     document.getElementById(modalId).classList.remove('hidden');
+    // Disable body scrolling on all devices
+    document.body.style.overflow = 'hidden';
 }
 
 window.closeModal = function(modalId) {
     document.getElementById(modalId).classList.add('hidden');
+    // Re-enable body scrolling
+    document.body.style.overflow = '';
 
     // Reset public project generation flag and show project selector again
     if (modalId === 'aiModal' && isGeneratingForPublicProject) {
@@ -1868,6 +1872,52 @@ window.cancelConfirm = function() {
     }
     confirmCallback = null;
     closeModal('confirmModal');
+}
+
+// Promise-based confirmation dialog
+window.showConfirmDialog = function(title, message, confirmText = 'Confirm', confirmClass = 'btn-danger', confirmIcon = 'fa-check') {
+    return new Promise((resolve) => {
+        // Set modal content
+        document.getElementById('confirmModalTitle').innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${title}`;
+        document.getElementById('confirmModalMessage').textContent = message;
+
+        // Set confirm button
+        const confirmBtn = document.getElementById('confirmModalButton');
+        confirmBtn.className = `btn ${confirmClass}`;
+        confirmBtn.innerHTML = `<i class="fas ${confirmIcon}"></i> ${confirmText}`;
+
+        // Setup handlers
+        const handleConfirm = (e) => {
+            e.stopPropagation();
+            cleanup();
+            closeModal('confirmModal');
+            resolve(true);
+        };
+
+        const handleCancel = () => {
+            cleanup();
+            closeModal('confirmModal');
+            resolve(false);
+        };
+
+        const cleanup = () => {
+            confirmBtn.removeEventListener('click', handleConfirm);
+            const cancelBtn = document.querySelector('#confirmModal .btn-secondary');
+            if (cancelBtn) {
+                cancelBtn.removeEventListener('click', handleCancel);
+            }
+        };
+
+        // Add event listeners
+        confirmBtn.addEventListener('click', handleConfirm);
+        const cancelBtn = document.querySelector('#confirmModal .btn-secondary');
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', handleCancel);
+        }
+
+        // Show modal
+        openModal('confirmModal');
+    });
 }
 
 // ============================================

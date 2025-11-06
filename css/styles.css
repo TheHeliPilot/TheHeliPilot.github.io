@@ -527,6 +527,69 @@ select:hover,
     color: var(--primary);
 }
 
+/* Regenerate Modal Checkbox Cards */
+.regenerate-checkbox-card {
+    position: relative;
+}
+
+.regenerate-checkbox-card:hover {
+    border-color: var(--primary) !important;
+    background: var(--surface-light) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.regenerate-checkbox-card:has(input:checked) {
+    border-color: var(--primary) !important;
+    background: rgba(29, 185, 84, 0.05) !important;
+}
+
+/* Custom Checkbox Styling */
+.custom-checkbox {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    border: 2px solid var(--border);
+    border-radius: 4px;
+    background: var(--background);
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s ease;
+    margin: auto 0 auto 0.5rem;
+    padding: 0;
+    top: 0;
+    bottom: 0;
+}
+
+.custom-checkbox:hover {
+    border-color: var(--primary);
+    background: var(--surface-light);
+}
+
+.custom-checkbox:checked {
+    background: var(--primary);
+    border-color: var(--primary);
+}
+
+.custom-checkbox:checked::after {
+    content: '';
+    position: absolute;
+    left: 6px;
+    top: 2px;
+    width: 5px;
+    height: 10px;
+    border: solid #ffffff;
+    border-width: 0 2.5px 2.5px 0;
+    transform: rotate(45deg);
+}
+
+.custom-checkbox:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(29, 185, 84, 0.2);
+}
+
 /* === MAIN APP LAYOUT === */
 .main-app {
     display: flex;
@@ -753,6 +816,11 @@ select:hover,
     background: var(--primary);
 }
 
+#projectDetailTitle {
+    text-align: center;
+    flex: 1;
+}
+
 .filter-group,
 .actions-group {
     display: flex;
@@ -761,8 +829,9 @@ select:hover,
 }
 
 .actions-group .btn {
-    flex: 1;
+    flex: 1 1 0;
     min-width: 0;
+    max-width: 100%;
 }
 
 /* Ensure explore search input is visible and responsive */
@@ -1388,6 +1457,18 @@ select:hover,
     font-size: 0.625rem;
 }
 
+/* Fullscreen editor top bar - desktop spacing */
+@media (min-width: 769px) {
+    .editor-top-bar > div:first-child {
+        margin-left: -1rem;
+    }
+
+    /* Prevent title input outline from overlapping status icons */
+    #fullscreenNoteTitle {
+        padding-right: 3rem !important;
+    }
+}
+
 /* === MODALS === */
 .modal {
     position: fixed !important;
@@ -1689,7 +1770,7 @@ select:hover,
     border: 2px solid var(--border);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-xl);
-    z-index: 2000;
+    z-index: 1000000;
     animation: slideInRight 0.3s ease;
     display: flex;
     align-items: center;
@@ -2228,7 +2309,7 @@ select:hover,
     }
 
     .actions-group .btn {
-        flex: 1 1 auto;
+        flex: 1 1 0;
         min-width: 150px;
     }
 }
@@ -2375,7 +2456,7 @@ select:hover,
     }
 
     .actions-group .btn {
-        flex: 1 1 auto;
+        flex: 1 1 0;
         min-width: 140px;
         max-width: 100%;
         justify-content: center;
@@ -2499,6 +2580,160 @@ select:hover,
         right: 10px;
         left: 10px;
         min-width: auto;
+    }
+
+    /* Fullscreen Note Editor - Mobile */
+    #fullscreenNoteEditor {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+        height: 100vh !important;
+        height: 100dvh !important; /* Dynamic viewport height for mobile browsers */
+        z-index: 10000 !important;
+        overflow: hidden !important;
+    }
+
+    #editorSidebar {
+        position: fixed !important;
+        left: -280px !important;
+        top: 0 !important;
+        height: 100vh !important;
+        height: 100dvh !important;
+        z-index: 10001 !important;
+        box-shadow: var(--shadow-xl) !important;
+        transition: left 0.3s ease !important;
+    }
+
+    #editorSidebar.open {
+        left: 0 !important;
+    }
+
+    /* Sidebar backdrop for mobile */
+    #editorSidebar::before {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
+        background: rgba(0, 0, 0, 0.5);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+        z-index: -1;
+    }
+
+    #editorSidebar.open::before {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    #showSidebarBtn {
+        display: flex !important;
+    }
+
+    #toggleSidebarBtn {
+        display: none !important;
+    }
+
+    /* Mobile fullscreen editor - completely redesigned header */
+    #fullscreenNoteEditor .editor-top-bar {
+        padding: 0.875rem 1rem !important;
+        gap: 0.75rem !important;
+        flex-wrap: nowrap !important;
+        border-bottom: 2px solid var(--border) !important;
+    }
+
+    /* Hide desktop title input on mobile - will be shown in page instead */
+    #fullscreenNoteTitle {
+        display: none !important;
+    }
+
+    /* Hide status text on mobile, keep only icons */
+    #fullscreenNoteSaveStatus span,
+    #fullscreenNoteIncludeStatus span {
+        display: none !important;
+    }
+
+    #fullscreenNoteSaveStatus,
+    #fullscreenNoteIncludeStatus {
+        gap: 0 !important;
+    }
+
+    #fullscreenNoteSaveStatus i,
+    #fullscreenNoteIncludeStatus i {
+        margin-right: 0.5rem !important;
+    }
+
+    /* AI Clean button - keep text visible */
+    #cleanCurrentNoteBtn {
+        font-size: 0.875rem !important;
+        padding: 0.5rem 0.75rem !important;
+    }
+
+    /* Show sidebar button - make it prominent */
+    #showSidebarBtn {
+        padding: 0.625rem !important;
+        min-width: auto !important;
+    }
+
+    /* Editor content - full width on mobile with better spacing */
+    #fullscreenNotesEditor {
+        padding: 1rem !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        background: var(--background) !important;
+    }
+
+    /* Editor container - no max-width on mobile */
+    #fullscreenNoteEditor .editor-top-bar + div {
+        background: var(--background) !important;
+    }
+
+    #fullscreenNoteEditor .editor-top-bar + div > div {
+        max-width: 100% !important;
+        padding: 1rem !important;
+    }
+
+    /* Mobile-specific title input - centered and editable */
+    #mobileNoteTitle {
+        display: block !important;
+        width: 100% !important;
+        font-size: 1.5rem !important;
+        font-weight: 700 !important;
+        color: var(--text) !important;
+        text-align: center !important;
+        padding: 1rem !important;
+        background: var(--background) !important;
+        border: none !important;
+        outline: none !important;
+    }
+
+    /* Move title above editor on mobile */
+    #fullscreenNoteEditor .editor-top-bar + div > div {
+        max-width: 100% !important;
+        padding: 0 !important;
+    }
+
+    #fullscreenNotesEditor {
+        margin-top: 0 !important;
+    }
+
+    /* Quill editor toolbar on mobile */
+    #fullscreenNotesEditor .ql-toolbar {
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 100 !important;
+        background: var(--surface) !important;
+        border-radius: var(--radius-md) var(--radius-md) 0 0 !important;
+    }
+
+    /* Quill editor container on mobile */
+    #fullscreenNotesEditor .ql-container {
+        font-size: 1rem !important;
+        min-height: calc(100vh - 200px) !important;
     }
 
     /* Stat cards - better mobile layout */
@@ -2632,6 +2867,13 @@ select:hover,
     .project-tab-content {
         padding: var(--spacing-md);
         min-height: 300px;
+    }
+
+    /* Make delete button always visible and red on mobile/tablet */
+    .note-card-delete-btn {
+        background: transparent !important;
+        color: rgba(153, 27, 27, 0.7) !important;
+        border: 2px solid rgba(153, 27, 27, 0.5) !important;
     }
 
     .notes-toolbar {
@@ -3534,6 +3776,13 @@ select:hover,
     .actions-group .btn {
         min-width: 100px;
         font-size: 0.875rem;
+    }
+
+    /* Make delete button always visible and red on mobile */
+    .note-card-delete-btn {
+        background: transparent !important;
+        color: rgba(153, 27, 27, 0.7) !important;
+        border: 2px solid rgba(153, 27, 27, 0.5) !important;
     }
 
     .admin-tabs {

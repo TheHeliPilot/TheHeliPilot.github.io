@@ -107,10 +107,10 @@ function setupProjectDetailEventListeners() {
         importNotesFile.addEventListener('change', handleFileImport);
     }
 
-    // Clean notes button
-    const cleanNotesBtn = document.getElementById('cleanNotesBtn');
-    if (cleanNotesBtn) {
-        cleanNotesBtn.addEventListener('click', cleanNotesWithAI);
+    // Clean current note button (in fullscreen editor)
+    const cleanCurrentNoteBtn = document.getElementById('cleanCurrentNoteBtn');
+    if (cleanCurrentNoteBtn) {
+        cleanCurrentNoteBtn.addEventListener('click', cleanNotesWithAI);
     }
 
     // Auto-save on editor change
@@ -135,10 +135,48 @@ function setupProjectDetailEventListeners() {
     }
 
 
-    // Regenerate project button
+    // Regenerate project button - opens modal
     const regenerateBtn = document.getElementById('regenerateProjectBtn');
     if (regenerateBtn) {
-        regenerateBtn.addEventListener('click', regenerateProject);
+        regenerateBtn.addEventListener('click', () => {
+            openModal('regenerateModal');
+        });
+    }
+
+    // Confirm regenerate button in modal
+    const confirmRegenerateBtn = document.getElementById('confirmRegenerateBtn');
+    if (confirmRegenerateBtn) {
+        confirmRegenerateBtn.addEventListener('click', () => {
+            // Validate at least one checkbox is selected
+            const studyChecked = document.getElementById('regenerateStudyCards')?.checked;
+            const testChecked = document.getElementById('regenerateTestCards')?.checked;
+
+            if (!studyChecked && !testChecked) {
+                showNotification('Please select at least one type of cards to regenerate', 'error');
+                return;
+            }
+
+            closeModal('regenerateModal');
+            regenerateProject();
+        });
+    }
+
+    // Toggle count inputs based on checkbox state
+    const regenerateStudyCardsCheckbox = document.getElementById('regenerateStudyCards');
+    const regenerateTestCardsCheckbox = document.getElementById('regenerateTestCards');
+    const studyCardsCountGroup = document.getElementById('studyCardsCountGroup');
+    const testCardsCountGroup = document.getElementById('testCardsCountGroup');
+
+    if (regenerateStudyCardsCheckbox && studyCardsCountGroup) {
+        regenerateStudyCardsCheckbox.addEventListener('change', (e) => {
+            studyCardsCountGroup.style.display = e.target.checked ? 'block' : 'none';
+        });
+    }
+
+    if (regenerateTestCardsCheckbox && testCardsCountGroup) {
+        regenerateTestCardsCheckbox.addEventListener('change', (e) => {
+            testCardsCountGroup.style.display = e.target.checked ? 'block' : 'none';
+        });
     }
 
     // Add test card button
@@ -196,6 +234,22 @@ function setupProjectDetailEventListeners() {
     const showSidebarBtn = document.getElementById('showSidebarBtn');
     if (showSidebarBtn) {
         showSidebarBtn.addEventListener('click', toggleSidebar);
+    }
+
+    // Close sidebar when clicking backdrop on mobile
+    const editorSidebar = document.getElementById('editorSidebar');
+    if (editorSidebar) {
+        editorSidebar.addEventListener('click', (e) => {
+            // Only close if clicking the backdrop (::before pseudo-element area)
+            const isMobile = window.matchMedia('(max-width: 768px)').matches;
+            if (isMobile && editorSidebar.classList.contains('open')) {
+                // Check if click is outside the sidebar content
+                const rect = editorSidebar.getBoundingClientRect();
+                if (e.clientX > rect.width) {
+                    toggleSidebar();
+                }
+            }
+        });
     }
 
     const selectAllNotesSidebarBtn = document.getElementById('selectAllNotesSidebarBtn');
@@ -276,8 +330,8 @@ async function openProject(projectId) {
         // Reset current note file
         currentNoteFile = null;
 
-        // Load saved language preference
-        const languageSelect = document.getElementById('generationLanguage');
+        // Load saved language preference into modal
+        const languageSelect = document.getElementById('regenerateLanguage');
         if (languageSelect && currentProject.language) {
             languageSelect.value = currentProject.language;
         }
@@ -741,14 +795,16 @@ function renderNoteFilesList() {
             <button class="note-card-delete-btn"
                     data-file-title="${escapeHtml(file.title)}"
                     style="position: absolute; top: 1rem; right: 1rem;
-                           padding: 0.5rem;
+                           padding: 0.5rem 0.6rem;
                            background: transparent;
-                           border: none;
-                           color: var(--text-muted);
+                           border: 2px solid rgba(153, 27, 27, 0.5);
+                           color: rgba(153, 27, 27, 0.7);
                            cursor: pointer;
-                           opacity: 0;
-                           transition: opacity 0.2s;
-                           border-radius: var(--radius-sm);">
+                           transition: all 0.2s;
+                           border-radius: var(--radius-sm);
+                           display: flex;
+                           align-items: center;
+                           justify-content: center;">
                 <i class="fas fa-trash"></i>
             </button>
 
@@ -806,16 +862,12 @@ function renderNoteFilesList() {
         card.addEventListener('mouseenter', () => {
             card.style.borderColor = 'var(--primary)';
             card.style.boxShadow = 'var(--shadow-lg)';
-            const deleteBtn = card.querySelector('.note-card-delete-btn');
-            if (deleteBtn) deleteBtn.style.opacity = '0.6';
         });
         card.addEventListener('mouseleave', () => {
             const fileId = card.dataset.fileId;
             const isActive = currentNoteFile && currentNoteFile.id === fileId;
             card.style.borderColor = isActive ? 'var(--primary)' : 'var(--border)';
             card.style.boxShadow = 'none';
-            const deleteBtn = card.querySelector('.note-card-delete-btn');
-            if (deleteBtn) deleteBtn.style.opacity = '0';
         });
 
         const deleteBtn = card.querySelector('.note-card-delete-btn');
@@ -836,14 +888,14 @@ function renderNoteFilesList() {
             });
 
             deleteBtn.addEventListener('mouseenter', () => {
-                deleteBtn.style.opacity = '1';
-                deleteBtn.style.background = 'rgba(239, 68, 68, 0.1)';
-                deleteBtn.style.color = 'var(--danger)';
+                deleteBtn.style.background = 'var(--danger)';
+                deleteBtn.style.color = 'white';
+                deleteBtn.style.borderColor = 'var(--danger)';
             });
             deleteBtn.addEventListener('mouseleave', () => {
-                deleteBtn.style.opacity = '0.6';
                 deleteBtn.style.background = 'transparent';
-                deleteBtn.style.color = 'var(--text-muted)';
+                deleteBtn.style.color = 'rgba(153, 27, 27, 0.7)';
+                deleteBtn.style.borderColor = 'rgba(153, 27, 27, 0.5)';
             });
         }
     });
@@ -872,10 +924,17 @@ function openNoteFileFullscreen(fileId) {
 
     editorPage.style.display = 'block';
 
-    // Load title
+    // Disable body scrolling
+    document.body.style.overflow = 'hidden';
+
+    // Load title (desktop and mobile)
     const titleInput = document.getElementById('fullscreenNoteTitle');
+    const mobileTitle = document.getElementById('mobileNoteTitle');
     if (titleInput) {
         titleInput.value = file.title;
+    }
+    if (mobileTitle) {
+        mobileTitle.value = file.title || 'Untitled Note';
     }
 
     // Load content into fullscreen editor
@@ -898,10 +957,31 @@ function openNoteFileFullscreen(fileId) {
     // Mark as saved
     markNoteAsSavedFullscreen();
 
-    // Set up title auto-save
+    // Set up title auto-save for desktop
     if (titleInput) {
         titleInput.oninput = () => {
             if (currentNoteFile) {
+                // Sync with mobile title input
+                const mobileTitle = document.getElementById('mobileNoteTitle');
+                if (mobileTitle) {
+                    mobileTitle.value = titleInput.value;
+                }
+                markNoteAsUnsavedFullscreen();
+                scheduleAutoSave();
+            }
+        };
+    }
+
+    // Set up title auto-save for mobile
+    if (mobileTitle && !mobileTitle._listenerAdded) {
+        mobileTitle._listenerAdded = true;
+        mobileTitle.oninput = () => {
+            if (currentNoteFile) {
+                // Sync with desktop title input
+                const titleInput = document.getElementById('fullscreenNoteTitle');
+                if (titleInput) {
+                    titleInput.value = mobileTitle.value;
+                }
                 markNoteAsUnsavedFullscreen();
                 scheduleAutoSave();
             }
@@ -928,17 +1008,11 @@ function renderFullscreenSidebarFilesList() {
                     transition: all 0.2s;
                     margin-bottom: 0.5rem;">
             <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <label class="custom-checkbox-container" style="width: 20px; height: 20px;" onclick="event.stopPropagation()">
-                    <input type="checkbox" class="sidebar-file-checkbox" ${file.selected ? 'checked' : ''} style="width: 20px; height: 20px;">
-                    <div class="custom-checkbox" style="width: 20px; height: 20px; border-radius: 4px; ${isActive ? 'border-color: rgba(255,255,255,0.5);' : ''}">
-                        <i class="fas fa-check custom-checkbox-icon" style="font-size: 11px;"></i>
-                    </div>
-                </label>
                 <div style="flex: 1; min-width: 0;">
                     <div style="font-size: 0.875rem; font-weight: 500;
                                 color: ${isActive ? '#fff' : 'var(--text)'};
                                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                        <i class="fas fa-file-alt" style="font-size: 0.75rem;"></i> ${escapeHtml(file.title)}
+                        <i class="fas fa-file-alt" style="font-size: 0.75rem; margin-left: 0.5rem; margin-right: 0.5rem;"></i>${escapeHtml(file.title)}
                     </div>
                 </div>
             </div>
@@ -951,18 +1025,8 @@ function renderFullscreenSidebarFilesList() {
         const fileId = item.dataset.fileId;
         const isActive = item.classList.contains('active');
 
-        // Checkbox handler
-        const checkbox = item.querySelector('.sidebar-file-checkbox');
-        if (checkbox) {
-            checkbox.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                await toggleNoteFileSelection(fileId);
-            });
-        }
-
         // Click handler to switch files
-        item.addEventListener('click', (e) => {
-            if (e.target.type === 'checkbox') return;
+        item.addEventListener('click', () => {
             switchNoteFileInFullscreen(fileId);
         });
 
@@ -1019,6 +1083,9 @@ async function closeFullscreenEditor() {
     const editorPage = document.getElementById('fullscreenNoteEditor');
     editorPage.style.display = 'none';
 
+    // Re-enable body scrolling
+    document.body.style.overflow = '';
+
     // Update main file browser
     renderNoteFilesList();
 }
@@ -1029,16 +1096,25 @@ function toggleSidebar() {
     const showSidebarBtn = document.getElementById('showSidebarBtn');
     const toggleBtn = document.getElementById('toggleSidebarBtn');
 
-    sidebarCollapsed = !sidebarCollapsed;
+    // Check if we're on mobile (using media query)
+    const isMobile = window.matchMedia('(max-width: 768px)').matches;
 
-    if (sidebarCollapsed) {
-        sidebar.style.transform = 'translateX(-100%)';
-        sidebar.style.width = '0';
-        showSidebarBtn.style.display = 'block';
+    if (isMobile) {
+        // Mobile: toggle the 'open' class for slide-in effect
+        sidebar.classList.toggle('open');
     } else {
-        sidebar.style.transform = 'translateX(0)';
-        sidebar.style.width = '280px';
-        showSidebarBtn.style.display = 'none';
+        // Desktop: use the collapse logic
+        sidebarCollapsed = !sidebarCollapsed;
+
+        if (sidebarCollapsed) {
+            sidebar.style.transform = 'translateX(-100%)';
+            sidebar.style.width = '0';
+            showSidebarBtn.style.display = 'block';
+        } else {
+            sidebar.style.transform = 'translateX(0)';
+            sidebar.style.width = '280px';
+            showSidebarBtn.style.display = 'none';
+        }
     }
 }
 
@@ -1288,12 +1364,19 @@ async function deleteNoteFile(fileId) {
 
     try {
         const { ref, update } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
-        currentProject.noteFiles = currentProject.noteFiles.filter(f => f.id !== fileId);
+
+        // Filter out the deleted file
+        const updatedNoteFiles = currentProject.noteFiles.filter(f => f.id !== fileId);
+
+        // Update local state
+        currentProject.noteFiles = updatedNoteFiles;
 
         const user = window.auth.currentUser;
         const projectRef = ref(window.db, `users/${user.uid}/projects/${currentProject.id}`);
+
+        // Firebase doesn't handle empty arrays well, so use null if empty
         await update(projectRef, {
-            noteFiles: currentProject.noteFiles
+            noteFiles: updatedNoteFiles.length > 0 ? updatedNoteFiles : null
         });
 
         if (currentNoteFile && currentNoteFile.id === fileId) {
@@ -1396,8 +1479,8 @@ async function saveNotes() {
         const notes = quillEditor.root.innerHTML;
         const user = window.auth.currentUser;
 
-        // Get selected language
-        const languageSelect = document.getElementById('generationLanguage');
+        // Get selected language from modal
+        const languageSelect = document.getElementById('regenerateLanguage');
         const language = languageSelect ? languageSelect.value : 'en';
 
         // Import Firebase functions dynamically
@@ -1575,8 +1658,8 @@ async function regenerateProject() {
             return;
         }
 
-        // Get selected language
-        const languageSelect = document.getElementById('generationLanguage');
+        // Get regeneration options from modal
+        const languageSelect = document.getElementById('regenerateLanguage');
         const language = languageSelect ? languageSelect.value : 'en';
         const languageNames = {
             'en': 'English',
@@ -1590,6 +1673,12 @@ async function regenerateProject() {
             'ru': 'Russian'
         };
         const languageName = languageNames[language] || 'English';
+
+        // Get checkbox states and counts
+        const regenerateStudyCards = document.getElementById('regenerateStudyCards')?.checked ?? true;
+        const regenerateTestCards = document.getElementById('regenerateTestCards')?.checked ?? true;
+        const studyCardsCount = parseInt(document.getElementById('studyCardsCount')?.value) || 10;
+        const testCardsCount = parseInt(document.getElementById('testCardsCount')?.value) || 10;
 
         // Show progress modal
         const progressModal = document.getElementById('generationProgressModal');
@@ -1648,59 +1737,79 @@ async function regenerateProject() {
         // Import Firebase functions
         const { ref, push, update, remove } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js');
 
-        // Delete old cards
-        window.generationOptimizer.updateProgress('Deleting old cards...', 70);
-        if (window.cards) {
-            const projectCards = window.cards.filter(c => c.projectId === currentProject.id);
-            for (const card of projectCards) {
-                if (!card.locked) {
-                    const cardRef = ref(window.db, `users/${user.uid}/cards/${card.id}`);
-                    await remove(cardRef);
+        // Apply user's selections - limit cards based on counts
+        const finalTestCards = regenerateTestCards
+            ? generatedData.testCards.slice(0, testCardsCount)
+            : [];
+        const finalStudyCards = regenerateStudyCards
+            ? generatedData.studyCards.slice(0, studyCardsCount)
+            : currentProject.studyCards || []; // Keep existing if not regenerating
+
+        // Delete old cards only if regenerating test cards
+        if (regenerateTestCards) {
+            window.generationOptimizer.updateProgress('Deleting old test cards...', 70);
+            if (window.cards) {
+                const projectCards = window.cards.filter(c => c.projectId === currentProject.id);
+                for (const card of projectCards) {
+                    if (!card.locked) {
+                        const cardRef = ref(window.db, `users/${user.uid}/cards/${card.id}`);
+                        await remove(cardRef);
+                    }
                 }
             }
-        }
 
-        // Save new test cards
-        window.generationOptimizer.updateProgress('Saving test cards...', 80);
-        const cardsRef = ref(window.db, `users/${user.uid}/cards`);
-        for (const card of generatedData.testCards) {
-            const cardData = {
-                projectId: currentProject.id,
-                question: card.question,
-                options: card.options,
-                correctAnswer: card.correctAnswer,
-                explanation: card.explanation || '',
-                difficulty: card.difficulty || 'medium',
-                relatedStudyCard: card.relatedStudyCard,
-                mastered: false,
-                locked: false,
-                createdAt: Date.now()
-            };
-            await push(cardsRef, cardData);
-        }
-
-        // Save study cards to project
-        window.generationOptimizer.updateProgress('Saving to database...', 90);
-        const projectRef = ref(window.db, `users/${user.uid}/projects/${currentProject.id}`);
-        await update(projectRef, {
-            studyCards: generatedData.studyCards,
-            studyCardsCount: generatedData.studyCardCount,
-            language: language,
-            updatedAt: new Date().toISOString()
-        });
-
-        // Update local project data
-        currentProject.studyCards = generatedData.studyCards;
-        currentProject.studyCardsCount = generatedData.studyCardCount;
-        currentProject.language = language;
-
-        if (window.projects) {
-            const projectIndex = window.projects.findIndex(p => p.id === currentProject.id);
-            if (projectIndex !== -1) {
-                window.projects[projectIndex].studyCards = generatedData.studyCards;
-                window.projects[projectIndex].studyCardsCount = generatedData.studyCardCount;
-                window.projects[projectIndex].language = language;
+            // Save new test cards
+            window.generationOptimizer.updateProgress('Saving test cards...', 80);
+            const cardsRef = ref(window.db, `users/${user.uid}/cards`);
+            for (const card of finalTestCards) {
+                const cardData = {
+                    projectId: currentProject.id,
+                    question: card.question,
+                    options: card.options,
+                    correctAnswer: card.correctAnswer,
+                    explanation: card.explanation || '',
+                    difficulty: card.difficulty || 'medium',
+                    relatedStudyCard: card.relatedStudyCard,
+                    mastered: false,
+                    locked: false,
+                    createdAt: Date.now()
+                };
+                await push(cardsRef, cardData);
             }
+        }
+
+        // Save study cards to project only if regenerating
+        if (regenerateStudyCards) {
+            window.generationOptimizer.updateProgress('Saving study cards...', 90);
+            const projectRef = ref(window.db, `users/${user.uid}/projects/${currentProject.id}`);
+            await update(projectRef, {
+                studyCards: finalStudyCards,
+                studyCardsCount: finalStudyCards.length,
+                language: language,
+                updatedAt: new Date().toISOString()
+            });
+
+            // Update local project data
+            currentProject.studyCards = finalStudyCards;
+            currentProject.studyCardsCount = finalStudyCards.length;
+            currentProject.language = language;
+
+            if (window.projects) {
+                const projectIndex = window.projects.findIndex(p => p.id === currentProject.id);
+                if (projectIndex !== -1) {
+                    window.projects[projectIndex].studyCards = finalStudyCards;
+                    window.projects[projectIndex].studyCardsCount = finalStudyCards.length;
+                    window.projects[projectIndex].language = language;
+                }
+            }
+        } else {
+            // Just update language if not regenerating study cards
+            const projectRef = ref(window.db, `users/${user.uid}/projects/${currentProject.id}`);
+            await update(projectRef, {
+                language: language,
+                updatedAt: new Date().toISOString()
+            });
+            currentProject.language = language;
         }
 
         // Reload cards from database

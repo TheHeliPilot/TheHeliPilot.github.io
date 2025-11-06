@@ -272,31 +272,16 @@
                 <div id="notesTab" class="project-tab-content active">
                     <div class="notes-toolbar">
                         <div class="notes-toolbar-left">
-                            <button id="addNoteFileBtn" class="btn btn-primary">
+                            <button id="addNoteFileBtn" class="btn btn-primary" style="display: inline-flex !important; align-items: center !important; justify-content: center !important; gap: 0.5rem; text-align: center;">
                                 <i class="fas fa-file-plus"></i>
-                                New Note File
+                                <span>New Note File</span>
                             </button>
-                            <select id="generationLanguage" class="select-input" style="width: 150px;">
-                                <option value="en">English</option>
-                                <option value="sk">Slovak</option>
-                                <option value="cs">Czech</option>
-                                <option value="de">German</option>
-                                <option value="fr">French</option>
-                                <option value="es">Spanish</option>
-                                <option value="it">Italian</option>
-                                <option value="pl">Polish</option>
-                                <option value="ru">Russian</option>
-                            </select>
                         </div>
                         <div class="notes-toolbar-right">
                             <input type="file" id="importNotesFile" accept=".pdf,.docx,.txt,.md" style="display: none;">
                             <button id="importNotesBtn" class="btn btn-secondary">
                                 <i class="fas fa-file-import"></i>
                                 Import File
-                            </button>
-                            <button id="cleanNotesBtn" class="btn btn-secondary" title="Use AI to clean, format, and organize your notes">
-                                <i class="fas fa-wand-magic-sparkles"></i>
-                                AI Clean
                             </button>
                             <button id="regenerateProjectBtn" class="btn btn-primary">
                                 <i class="fas fa-sync-alt"></i>
@@ -703,7 +688,7 @@
                     <div id="editorSidebar" style="width: 280px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; transition: transform 0.3s ease;">
                         <!-- Sidebar Header -->
                         <div style="padding: 1.5rem; border-bottom: 1px solid var(--border);">
-                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+                            <div style="display: flex; align-items: center; justify-content: space-between;">
                                 <h3 style="margin: 0; font-size: 0.875rem; color: var(--text); font-weight: 600;">
                                     <i class="fas fa-file-alt"></i> <span id="sidebarProjectName">Notes</span>
                                 </h3>
@@ -711,47 +696,50 @@
                                     <i class="fas fa-chevron-left"></i>
                                 </button>
                             </div>
-                            <button id="closeEditorBtn" class="btn btn-secondary" style="width: 100%; justify-content: center;">
-                                <i class="fas fa-arrow-left"></i> Back to Project
-                            </button>
                         </div>
 
                         <!-- Files List -->
-                        <div style="padding: 1rem; border-bottom: 1px solid var(--border);">
-                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
-                                <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">Files</span>
-                                <button id="selectAllNotesSidebarBtn" class="btn btn-sm" style="padding: 0.25rem 0.5rem; font-size: 0.7rem;">All</button>
-                            </div>
-                        </div>
                         <div id="sidebarNotesList" style="flex: 1; overflow-y: auto; padding: 0.5rem;">
                             <!-- Note files will be rendered here -->
+                        </div>
+
+                        <!-- Sidebar Footer - Sticky to bottom -->
+                        <div style="padding: 1rem; border-top: 1px solid var(--border); margin-top: auto;">
+                            <button id="closeEditorBtn" class="btn btn-secondary" style="width: 100%; justify-content: center;">
+                                <i class="fas fa-arrow-left"></i> Back to Project
+                            </button>
                         </div>
                     </div>
 
                     <!-- Main Editor Area -->
                     <div style="flex: 1; display: flex; flex-direction: column; position: relative; overflow: hidden;">
                         <!-- Top Bar -->
-                        <div style="padding: 1rem 2rem; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; justify-content: space-between;">
-                            <button id="showSidebarBtn" class="btn btn-secondary" style="display: none; padding: 0.5rem;">
-                                <i class="fas fa-bars"></i>
-                            </button>
+                        <div class="editor-top-bar" style="padding: 1rem 2rem; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; justify-content: space-between;">
+                            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                <button id="showSidebarBtn" class="btn btn-secondary" style="display: none; padding: 0.75rem 1rem; border-radius: 16px;">
+                                    <i class="fas fa-bars"></i>
+                                </button>
+                                <button id="cleanCurrentNoteBtn" class="btn btn-secondary" title="Use AI to clean, format, and organize this note" style="border-radius: 16px; margin-right: 1rem;">
+                                    <i class="fas fa-wand-magic-sparkles"></i>
+                                    <span>AI Clean</span>
+                                </button>
+                            </div>
                             <div style="flex: 1; max-width: 800px; margin: 0 auto;">
                                 <input type="text" id="fullscreenNoteTitle" placeholder="Untitled Note"
-                                       style="width: 100%; background: transparent; border: none; padding: 0.5rem 0;
-                                              color: var(--text); font-size: 1.5rem; font-weight: 700; outline: none;">
+                                       style="width: 100%; background: transparent; border: none; padding: 1.2rem;
+                                              margin-right: 1rem; font-size: 1.5rem; font-weight: 700; outline: none;">
                             </div>
                             <div style="display: flex; align-items: center; gap: 1rem;">
-                                <span id="fullscreenNoteSaveStatus" style="font-size: 0.875rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.5rem;">
-                                    <i class="fas fa-circle" style="font-size: 0.5rem; color: var(--success);"></i> Saved
-                                </span>
-                                <span id="fullscreenNoteIncludeStatus" style="font-size: 0.875rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.5rem;">
-                                    <i class="fas fa-check-circle" style="color: var(--success);"></i> Included
+                                <span id="fullscreenNoteSaveStatus" style="font-size: 0.875rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.5rem; margin-left: 1rem;">
+                                    <i class="fas fa-circle" style="font-size: 0.5rem; color: var(--success);"></i> <span>Saved</span>
                                 </span>
                             </div>
                         </div>
 
                         <!-- Editor Container -->
                         <div style="flex: 1; overflow-y: auto; background: var(--background);">
+                            <!-- Mobile title (hidden on desktop) -->
+                            <input type="text" id="mobileNoteTitle" placeholder="Untitled Note" style="display: none;">
                             <div style="max-width: 900px; margin: 0 auto; padding: 3rem 2rem;">
                                 <div id="fullscreenNotesEditor" style="min-height: 500px; background: var(--surface); border-radius: var(--radius-lg); padding: 2rem; box-shadow: var(--shadow-md);"></div>
                             </div>
@@ -1803,6 +1791,100 @@
                 <button class="btn btn-secondary" onclick="window.cancelConfirm(); event.stopPropagation();">Cancel</button>
                 <button id="confirmModalButton" class="btn btn-danger">
                     <i class="fas fa-trash"></i> Delete
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Regenerate Project Modal -->
+    <div id="regenerateModal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-sync-alt"></i> Regenerate Project</h3>
+                <button class="modal-close" data-modal="regenerateModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label><i class="fas fa-language" style="margin-right: 0.5rem;"></i>Generation Language</label>
+                    <select id="regenerateLanguage" class="select-input">
+                        <option value="en">English</option>
+                        <option value="sk">Slovak</option>
+                        <option value="cs">Czech</option>
+                        <option value="de">German</option>
+                        <option value="fr">French</option>
+                        <option value="es">Spanish</option>
+                        <option value="it">Italian</option>
+                        <option value="pl">Polish</option>
+                        <option value="ru">Russian</option>
+                    </select>
+                </div>
+
+                <div style="margin: 1.5rem 0; padding-top: 1.5rem; border-top: 1px solid var(--border);">
+                    <label style="display: block; margin-bottom: 1rem; color: var(--text); font-weight: 600; font-size: 0.875rem;">
+                        <i class="fas fa-tasks" style="margin-right: 0.5rem;"></i>What to Regenerate
+                    </label>
+
+                    <div style="display: flex; flex-direction: column; gap: 1rem;">
+                        <label class="regenerate-checkbox-card" style="display: flex; align-items: center; cursor: pointer; padding: 1rem; border-radius: var(--radius-md); background: var(--surface); border: 2px solid var(--border); transition: all 0.2s;">
+                            <input type="checkbox" id="regenerateStudyCards" checked class="custom-checkbox">
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-left: 2rem;">
+                                <i class="fas fa-graduation-cap" style="color: var(--primary);"></i>
+                                <span style="font-weight: 600; color: var(--text); font-size: 0.9375rem;">Study Cards</span>
+                            </div>
+                        </label>
+
+                        <div id="studyCardsCountGroup" style="margin-top: 0.125rem; margin-bottom: 1rem;">
+                            <label style="display: block; font-size: 0.875rem; color: var(--text); margin-bottom: 0.5rem; font-weight: 500;">Number of study cards</label>
+                            <input type="number" id="studyCardsCount" class="text-input" value="10" min="1" max="100" style="width: 100%;">
+                        </div>
+
+                        <label class="regenerate-checkbox-card" style="display: flex; align-items: center; cursor: pointer; padding: 1rem; border-radius: var(--radius-md); background: var(--surface); border: 2px solid var(--border); transition: all 0.2s;">
+                            <input type="checkbox" id="regenerateTestCards" checked class="custom-checkbox">
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-left: 2rem;">
+                                <i class="fas fa-clipboard-check" style="color: var(--info);"></i>
+                                <span style="font-weight: 600; color: var(--text); font-size: 0.9375rem;">Test Cards</span>
+                            </div>
+                        </label>
+
+                        <div id="testCardsCountGroup" style="margin-top: 0.125rem;">
+                            <label style="display: block; font-size: 0.875rem; color: var(--text); margin-bottom: 0.5rem; font-weight: 500;">Number of test cards</label>
+                            <input type="number" id="testCardsCount" class="text-input" value="10" min="1" max="100" style="width: 100%;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-modal="regenerateModal">Cancel</button>
+                <button id="confirmRegenerateBtn" class="btn btn-primary">
+                    <i class="fas fa-sync-alt"></i> Regenerate
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Note Title Modal (Mobile) -->
+    <div id="editNoteTitleModal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2 style="margin: 0; font-size: 1.25rem;">Edit Note Title</h2>
+                <button class="btn-icon" data-modal="editNoteTitleModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="mobileNoteTitleInput">Note Title</label>
+                    <input type="text" id="mobileNoteTitleInput" class="text-input" placeholder="Untitled Note">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-modal="editNoteTitleModal">Cancel</button>
+                <button id="saveMobileNoteTitleBtn" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Save
                 </button>
             </div>
         </div>
