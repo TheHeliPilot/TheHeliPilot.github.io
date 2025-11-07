@@ -21,7 +21,6 @@ export function initProjectDetailPage() {
                         [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
                         ['bold', 'italic', 'underline', 'strike'],
                         [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                        [{ 'indent': '-1'}, { 'indent': '+1' }],
                         [{ 'color': [] }, { 'background': [] }],
                         [{ 'align': [] }],
                         ['link', 'image', 'code-block'],
@@ -44,7 +43,6 @@ export function initProjectDetailPage() {
                         [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
                         ['bold', 'italic', 'underline', 'strike'],
                         [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                        [{ 'indent': '-1'}, { 'indent': '+1' }],
                         [{ 'color': [] }, { 'background': [] }],
                         [{ 'align': [] }],
                         ['link', 'image', 'code-block'],
@@ -62,6 +60,9 @@ export function initProjectDetailPage() {
             });
         }
     }
+
+    // Setup mobile selection menu for fullscreen editor
+    setupMobileSelectionMenu(fullscreenQuillEditor);
 
     setupProjectDetailEventListeners();
 }
@@ -280,6 +281,107 @@ function setupProjectDetailEventListeners() {
 
     // Initialize study mode
     initStudyMode();
+}
+
+// Setup mobile text selection context menu
+function setupMobileSelectionMenu(quillInstance) {
+    if (!quillInstance) return;
+
+    // Create mobile format menu element
+    let formatMenu = document.getElementById('mobile-format-menu');
+    if (!formatMenu) {
+        formatMenu = document.createElement('div');
+        formatMenu.id = 'mobile-format-menu';
+        formatMenu.className = 'mobile-format-menu';
+        formatMenu.innerHTML = `
+            <button data-format="bold"><i class="fas fa-bold"></i></button>
+            <button data-format="italic"><i class="fas fa-italic"></i></button>
+            <button data-format="underline"><i class="fas fa-underline"></i></button>
+            <button data-format="align-left"><i class="fas fa-align-left"></i></button>
+            <button data-format="align-center"><i class="fas fa-align-center"></i></button>
+            <button data-format="align-right"><i class="fas fa-align-right"></i></button>
+        `;
+        document.body.appendChild(formatMenu);
+
+        // Add format button handlers
+        formatMenu.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const format = btn.dataset.format;
+
+                // Apply formatting based on button clicked
+                if (format === 'bold' || format === 'italic' || format === 'underline') {
+                    const currentFormat = quillInstance.getFormat();
+                    quillInstance.format(format, !currentFormat[format]);
+                } else if (format.startsWith('align-')) {
+                    const alignment = format.split('-')[1];
+                    quillInstance.format('align', alignment === 'left' ? false : alignment);
+                }
+
+                // Keep menu open briefly to show the change, then hide
+                setTimeout(() => {
+                    formatMenu.classList.remove('show');
+                }, 200);
+            });
+        });
+    }
+
+    // Show menu on text selection (mobile only)
+    quillInstance.on('selection-change', (range) => {
+        if (window.innerWidth <= 768 && range && range.length > 0) {
+            // Position and show menu
+            positionMenuNearSelection(quillInstance, formatMenu);
+            formatMenu.classList.add('show');
+        } else {
+            formatMenu.classList.remove('show');
+        }
+    });
+
+    // Hide on click outside
+    document.addEventListener('click', (e) => {
+        if (!formatMenu.contains(e.target) &&
+            !quillInstance.container.contains(e.target) &&
+            window.innerWidth <= 768) {
+            formatMenu.classList.remove('show');
+        }
+    });
+}
+
+// Position mobile format menu near text selection
+function positionMenuNearSelection(quillInstance, menu) {
+    const selection = quillInstance.getSelection();
+    if (!selection) return;
+
+    const bounds = quillInstance.getBounds(selection.index, selection.length);
+    const editorRect = quillInstance.container.getBoundingClientRect();
+
+    // Calculate absolute position
+    const menuHeight = 56; // Approximate height of menu
+    const menuWidth = 280; // Approximate width of menu (6 buttons * 44px + gaps)
+
+    let top = editorRect.top + bounds.top - menuHeight - 10; // 10px gap above selection
+    let left = editorRect.left + bounds.left + (bounds.width / 2) - (menuWidth / 2);
+
+    // Check if menu would go above viewport
+    if (top < 10) {
+        // Position below selection instead
+        top = editorRect.top + bounds.bottom + 10;
+    }
+
+    // Check if menu would go beyond left edge
+    if (left < 10) {
+        left = 10;
+    }
+
+    // Check if menu would go beyond right edge
+    if (left + menuWidth > window.innerWidth - 10) {
+        left = window.innerWidth - menuWidth - 10;
+    }
+
+    // Apply position
+    menu.style.top = `${top}px`;
+    menu.style.left = `${left}px`;
 }
 
 // Open a project in detail view
@@ -936,8 +1038,19 @@ function openNoteFileFullscreen(fileId) {
 
     editorPage.style.display = 'block';
 
-    // Disable body scrolling
-    document.body.style.overflow = 'hidden';
+    // Disable body scrolling and lock position on mobile
+    const isMobile = window.matchMedia('(max-width: 768px)').matches;
+    if (isMobile) {
+        const scrollY = window.scrollY;
+        document.body.style.position = 'fixed';
+        document.body.style.top = `-${scrollY}px`;
+        document.body.style.width = '100%';
+        document.body.style.overflow = 'hidden';
+        // Store scroll position to restore later
+        document.body.dataset.scrollY = scrollY.toString();
+    } else {
+        document.body.style.overflow = 'hidden';
+    }
 
     // Load title (desktop and mobile)
     const titleInput = document.getElementById('fullscreenNoteTitle');
@@ -1114,8 +1227,19 @@ async function closeFullscreenEditor() {
     const editorPage = document.getElementById('fullscreenNoteEditor');
     editorPage.style.display = 'none';
 
-    // Re-enable body scrolling
-    document.body.style.overflow = '';
+    // Re-enable body scrolling and restore position on mobile
+    const isMobile = window.matchMedia('(max-width: 768px)').matches;
+    if (isMobile && document.body.dataset.scrollY) {
+        const scrollY = parseInt(document.body.dataset.scrollY, 10);
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.width = '';
+        document.body.style.overflow = '';
+        window.scrollTo(0, scrollY);
+        delete document.body.dataset.scrollY;
+    } else {
+        document.body.style.overflow = '';
+    }
 
     // Update main file browser
     renderNoteFilesList();

@@ -2582,16 +2582,34 @@ select:hover,
         min-width: auto;
     }
 
-    /* Fullscreen Note Editor - Mobile */
+    /* Fullscreen Note Editor - Mobile - Make it a true full window, not a popup */
     #fullscreenNoteEditor {
         position: fixed !important;
         top: 0 !important;
         left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
         width: 100% !important;
         height: 100vh !important;
         height: 100dvh !important; /* Dynamic viewport height for mobile browsers */
         z-index: 10000 !important;
         overflow: hidden !important;
+        background: var(--background) !important;
+        /* Prevent any interaction with elements behind */
+        -webkit-overflow-scrolling: touch !important;
+        overscroll-behavior: contain !important;
+        touch-action: pan-y !important;
+    }
+
+    /* When editor is open, prevent body scroll and zoom */
+    body:has(#fullscreenNoteEditor[style*="display: block"]),
+    body:has(#fullscreenNoteEditor:not([style*="display: none"])) {
+        overflow: hidden !important;
+        position: fixed !important;
+        width: 100% !important;
+        height: 100% !important;
+        touch-action: none !important;
+        -webkit-overflow-scrolling: auto !important;
     }
 
     #editorSidebar {
@@ -3471,34 +3489,109 @@ select:hover,
     background: var(--surface);
     border: 1px solid rgba(255, 255, 255, 0.08) !important;
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-    padding: 0.625rem 1rem !important;
+    padding: 0.5rem 0.75rem !important;
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.375rem;
+    flex-wrap: nowrap;
+    gap: 0.25rem;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
     position: relative;
     z-index: 100;
     align-items: center;
+    overflow-x: auto;
+    overflow-y: hidden;
 }
 
+.ql-toolbar.ql-snow::-webkit-scrollbar {
+    height: 4px;
+}
+
+.ql-toolbar.ql-snow::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.ql-toolbar.ql-snow::-webkit-scrollbar-thumb {
+    background: rgba(29, 185, 84, 0.3);
+    border-radius: 2px;
+}
 
 .ql-toolbar.ql-snow .ql-formats {
-    margin-right: 0.125rem !important;
+    margin-right: 0 !important;
     display: flex;
-    gap: 0.25rem;
+    gap: 0.1875rem;
     align-items: center;
-    padding: 0.25rem;
-    border-radius: 6px;
-    background: rgba(255, 255, 255, 0.03);
+    padding: 0.1875rem 0.25rem;
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.02);
     border: none;
+    flex-shrink: 0;
+}
+
+/* Mobile: Hide toolbar and show context menu on text selection */
+@media (max-width: 768px) {
+    .ql-toolbar.ql-snow {
+        display: none !important;
+    }
+
+    .ql-container.ql-snow {
+        border-radius: var(--radius-lg) !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+    }
+}
+
+/* Mobile selection context menu */
+.mobile-format-menu {
+    position: absolute;
+    display: none;
+    background: rgba(20, 20, 20, 0.98);
+    border: 1px solid rgba(29, 185, 84, 0.3);
+    border-radius: 8px;
+    padding: 0.5rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(29, 185, 84, 0.2);
+    z-index: 10000;
+    backdrop-filter: blur(12px);
+    gap: 0.375rem;
+}
+
+.mobile-format-menu.show {
+    display: flex;
+}
+
+.mobile-format-menu button {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.125rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.mobile-format-menu button:active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+    transform: scale(0.95);
+}
+
+.mobile-format-menu button.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
 }
 
 /* Toolbar Buttons */
 .ql-toolbar.ql-snow button {
-    width: 34px !important;
-    height: 34px !important;
-    padding: 0.5rem !important;
-    border-radius: 7px !important;
+    width: 30px !important;
+    height: 30px !important;
+    padding: 0.375rem !important;
+    border-radius: 5px !important;
     border: 1px solid rgba(255, 255, 255, 0.06) !important;
     background: rgba(255, 255, 255, 0.03) !important;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
@@ -3507,6 +3600,7 @@ select:hover,
     justify-content: center !important;
     box-shadow: none;
     cursor: pointer;
+    flex-shrink: 0;
 }
 
 .ql-toolbar.ql-snow button:hover {
@@ -3542,18 +3636,19 @@ select:hover,
 
 /* Toolbar Dropdowns - Improved */
 .ql-toolbar.ql-snow .ql-picker {
-    height: 34px !important;
-    border-radius: 7px !important;
+    height: 30px !important;
+    border-radius: 5px !important;
     border: 1px solid rgba(255, 255, 255, 0.06) !important;
     background: rgba(255, 255, 255, 0.03) !important;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
     display: inline-flex !important;
     align-items: center !important;
-    gap: 0.375rem !important;
-    padding: 0 0.625rem 0 0.5rem !important;
+    gap: 0.25rem !important;
+    padding: 0 0.375rem 0 0.375rem !important;
     box-shadow: none;
     cursor: pointer !important;
     position: relative !important;
+    flex-shrink: 0;
 }
 
 .ql-toolbar.ql-snow .ql-picker:hover {
@@ -3582,6 +3677,24 @@ select:hover,
     margin-left: 0.25rem !important;
 }
 
+/* Hide dropdown arrow icon and current style text */
+.ql-toolbar.ql-snow .ql-picker-label svg.ql-fill polygon {
+    display: none !important;
+}
+
+.ql-toolbar.ql-snow .ql-picker-label svg:last-child {
+    display: none !important;
+}
+
+/* Hide the current style text in picker labels */
+.ql-toolbar.ql-snow .ql-picker-label::before {
+    display: none !important;
+}
+
+.ql-toolbar.ql-snow .ql-picker-label[data-label]::before {
+    display: none !important;
+}
+
 /* Make sure color preview is visible in picker label */
 .ql-toolbar.ql-snow .ql-color .ql-picker-label .ql-stroke,
 .ql-toolbar.ql-snow .ql-background .ql-picker-label .ql-stroke {
@@ -3595,7 +3708,7 @@ select:hover,
 
 /* Align picker label */
 .ql-toolbar.ql-snow .ql-align .ql-picker-label {
-    min-width: 60px !important;
+    min-width: auto !important;
 }
 
 .ql-toolbar.ql-snow .ql-align .ql-picker-label .ql-stroke {
