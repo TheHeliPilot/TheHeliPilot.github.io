@@ -93,6 +93,18 @@ function setupProjectDetailEventListeners() {
         addNoteFileBtn.addEventListener('click', createNewNoteFile);
     }
 
+    const addNoteFromSidebarBtn = document.getElementById('addNoteFromSidebarBtn');
+    if (addNoteFromSidebarBtn) {
+        addNoteFromSidebarBtn.addEventListener('click', createNewNoteFile);
+    }
+
+    const importFileFromSidebarBtn = document.getElementById('importFileFromSidebarBtn');
+    const importNotesFileSidebar = document.getElementById('importNotesFileSidebar');
+    if (importFileFromSidebarBtn && importNotesFileSidebar) {
+        importFileFromSidebarBtn.addEventListener('click', () => importNotesFileSidebar.click());
+        importNotesFileSidebar.addEventListener('change', handleFileImport);
+    }
+
     // Select all notes button
     const selectAllNotesBtn = document.getElementById('selectAllNotesBtn');
     if (selectAllNotesBtn) {
@@ -994,25 +1006,26 @@ function renderFullscreenSidebarFilesList() {
     const container = document.getElementById('sidebarNotesList');
     if (!container || !currentProject || !currentProject.noteFiles) return;
 
-    // Sort files
-    const sortedFiles = sortNoteFiles(currentProject.noteFiles);
+    // Sort files alphabetically (always, regardless of main sort order)
+    const sortedFiles = [...currentProject.noteFiles].sort((a, b) => a.title.localeCompare(b.title));
 
-    container.innerHTML = sortedFiles.map(file => {
+    container.innerHTML = sortedFiles.map((file, index) => {
         const isActive = currentNoteFile && currentNoteFile.id === file.id;
         return `
         <div class="sidebar-note-item ${isActive ? 'active' : ''}" data-file-id="${file.id}"
-             style="padding: 0.75rem;
+             style="padding: 0.5rem 1rem;
                     background: ${isActive ? 'var(--primary)' : 'transparent'};
-                    border-radius: var(--radius-md);
+                    border: none;
                     cursor: pointer;
-                    transition: all 0.2s;
-                    margin-bottom: 0.5rem;">
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+                    margin-bottom: 0;">
+            <div style="display: flex; align-items: center; gap: 0.625rem;">
                 <div style="flex: 1; min-width: 0;">
-                    <div style="font-size: 0.875rem; font-weight: 500;
+                    <div style="font-size: 0.875rem; font-weight: ${isActive ? '600' : '500'};
                                 color: ${isActive ? '#fff' : 'var(--text)'};
-                                white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                        <i class="fas fa-file-alt" style="font-size: 0.75rem; margin-left: 0.5rem; margin-right: 0.5rem;"></i>${escapeHtml(file.title)}
+                                white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+                                letter-spacing: 0.01em;">
+                        <i class="fas fa-file-alt" style="font-size: 0.75rem; margin-right: 0.625rem; opacity: ${isActive ? '1' : '0.7'};"></i>${escapeHtml(file.title)}
                     </div>
                 </div>
             </div>
@@ -1026,17 +1039,31 @@ function renderFullscreenSidebarFilesList() {
         const isActive = item.classList.contains('active');
 
         // Click handler to switch files
-        item.addEventListener('click', () => {
+        item.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent backdrop click handler from interfering
             switchNoteFileInFullscreen(fileId);
+
+            // Close sidebar on mobile after selecting a note
+            const isMobile = window.matchMedia('(max-width: 768px)').matches;
+            if (isMobile) {
+                const sidebar = document.getElementById('editorSidebar');
+                if (sidebar && sidebar.classList.contains('open')) {
+                    sidebar.classList.remove('open');
+                }
+            }
         });
 
         // Hover effects (only for non-active items)
         if (!isActive) {
             item.addEventListener('mouseenter', () => {
-                item.style.background = 'var(--surface-light)';
+                item.style.background = 'rgba(255, 255, 255, 0.06)';
+                const icon = item.querySelector('.fa-file-alt');
+                if (icon) icon.style.opacity = '1';
             });
             item.addEventListener('mouseleave', () => {
                 item.style.background = 'transparent';
+                const icon = item.querySelector('.fa-file-alt');
+                if (icon) icon.style.opacity = '0.7';
             });
         }
     });
@@ -1056,10 +1083,14 @@ async function switchNoteFileInFullscreen(fileId) {
 
     currentNoteFile = file;
 
-    // Load new note
+    // Load new note (desktop and mobile titles)
     const titleInput = document.getElementById('fullscreenNoteTitle');
+    const mobileTitle = document.getElementById('mobileNoteTitle');
     if (titleInput) {
         titleInput.value = file.title;
+    }
+    if (mobileTitle) {
+        mobileTitle.value = file.title || 'Untitled Note';
     }
 
     if (fullscreenQuillEditor) {
