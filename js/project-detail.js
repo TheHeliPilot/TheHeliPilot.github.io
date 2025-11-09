@@ -64,6 +64,9 @@ export function initProjectDetailPage() {
     // Setup mobile selection menu for fullscreen editor
     setupMobileSelectionMenu(fullscreenQuillEditor);
 
+    // Setup fixed positioning for Quill dropdowns
+    setupQuillDropdownPositioning();
+
     setupProjectDetailEventListeners();
 }
 
@@ -298,6 +301,7 @@ function setupMobileSelectionMenu(quillInstance) {
                 <button data-format="header" data-value="1" title="Heading 1"><i class="fas fa-heading"></i><sub>1</sub></button>
                 <button data-format="header" data-value="2" title="Heading 2"><i class="fas fa-heading"></i><sub>2</sub></button>
                 <button data-format="header" data-value="3" title="Heading 3"><i class="fas fa-heading"></i><sub>3</sub></button>
+                <button data-format="header" data-value="false" title="Normal Text"><span class="text-n">N</span></button>
                 <button data-format="bold" title="Bold"><i class="fas fa-bold"></i></button>
                 <button data-format="italic" title="Italic"><i class="fas fa-italic"></i></button>
                 <button data-format="underline" title="Underline"><i class="fas fa-underline"></i></button>
@@ -309,10 +313,16 @@ function setupMobileSelectionMenu(quillInstance) {
                 <button data-format="align" data-value="right" title="Align Right"><i class="fas fa-align-right"></i></button>
                 <button data-format="link" title="Insert Link"><i class="fas fa-link"></i></button>
                 <button data-format="code-block" title="Code Block"><i class="fas fa-code"></i></button>
+                <button data-format="header" data-value="4" title="Heading 4"><i class="fas fa-heading"></i><sub>4</sub></button>
+                <button data-format="header" data-value="5" title="Heading 5"><i class="fas fa-heading"></i><sub>5</sub></button>
+                <button data-format="header" data-value="6" title="Heading 6"><i class="fas fa-heading"></i><sub>6</sub></button>
                 <button data-format="clean" title="Clear Formatting"><i class="fas fa-eraser"></i></button>
             </div>
         `;
         document.body.appendChild(formatMenu);
+
+        // Create mobile formatting tip
+        createMobileFormattingTip(quillInstance);
 
         // Add format button handlers
         formatMenu.querySelectorAll('button').forEach(btn => {
@@ -340,8 +350,13 @@ function setupMobileSelectionMenu(quillInstance) {
 
                     case 'header':
                         // Toggle header (if same header level, remove; otherwise apply)
-                        const headerValue = parseInt(value);
-                        quillInstance.format('header', currentFormat.header === headerValue ? false : headerValue);
+                        if (value === 'false') {
+                            // Remove header formatting (set to normal text)
+                            quillInstance.format('header', false);
+                        } else {
+                            const headerValue = parseInt(value);
+                            quillInstance.format('header', currentFormat.header === headerValue ? false : headerValue);
+                        }
                         break;
 
                     case 'list':
@@ -488,32 +503,138 @@ function setupMobileSelectionMenu(quillInstance) {
     });
 }
 
-// Position mobile format menu near text selection
+// Create and manage mobile formatting tip
+function createMobileFormattingTip(quillInstance) {
+    // Check if tip was already dismissed
+    const tipDismissed = localStorage.getItem('mobileFormattingTipDismissed');
+    if (tipDismissed === 'true') return;
+
+    // Create tip element
+    let tip = document.getElementById('mobile-formatting-tip');
+    if (!tip) {
+        tip = document.createElement('div');
+        tip.id = 'mobile-formatting-tip';
+        tip.className = 'mobile-formatting-tip';
+        tip.innerHTML = `
+            <div class="mobile-tip-content">
+                <i class="fas fa-info-circle"></i>
+                <div class="mobile-tip-text">
+                    <div class="mobile-tip-message">
+                        <strong>Tip:</strong>
+                        <span>Select text and hold to open formatting menu.</span>
+                    </div>
+                    <a href="#" class="mobile-tip-dismiss">Don't show again</a>
+                </div>
+                <button class="mobile-tip-close" aria-label="Close tip">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `;
+
+        // Insert tip before the editor
+        const editorContainer = quillInstance.container.parentElement;
+        if (editorContainer) {
+            editorContainer.parentElement.insertBefore(tip, editorContainer);
+        }
+
+        // Add temporary close handler (X button) - just hides for this session
+        const closeBtn = tip.querySelector('.mobile-tip-close');
+        closeBtn.addEventListener('click', () => {
+            tip.classList.add('hide');
+            setTimeout(() => {
+                tip.style.display = 'none';
+            }, 300);
+        });
+
+        // Add permanent dismiss handler ("Don't show again")
+        const dismissLink = tip.querySelector('.mobile-tip-dismiss');
+        dismissLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            tip.classList.add('hide');
+            setTimeout(() => {
+                tip.remove();
+            }, 300);
+            localStorage.setItem('mobileFormattingTipDismissed', 'true');
+        });
+
+        // Show tip only on mobile
+        if (window.innerWidth <= 768) {
+            setTimeout(() => {
+                tip.classList.add('show');
+            }, 1000); // Show after 1 second delay
+        }
+    }
+}
+
+// Global function to reset the formatting tip (for testing/debugging)
+window.resetFormattingTip = function() {
+    localStorage.removeItem('mobileFormattingTipDismissed');
+    const existingTip = document.getElementById('mobile-formatting-tip');
+    if (existingTip) {
+        existingTip.remove();
+    }
+    console.log('✅ Formatting tip reset! Reload the page to see it again.');
+};
+
+// Position format menu near text selection
 function positionMenuNearSelection(quillInstance, menu) {
     const selection = quillInstance.getSelection();
     if (!selection) return;
 
     const bounds = quillInstance.getBounds(selection.index, selection.length);
     const editorRect = quillInstance.container.getBoundingClientRect();
+    const isDesktop = window.innerWidth > 768;
 
-    // Calculate absolute position
-    const menuHeight = 60; // Approximate height of menu with scrollbar
-    const margin = 10;
-    const menuWidth = window.innerWidth - (margin * 2); // Full width minus margins
+    if (isDesktop) {
+        // Desktop: grid menu (3 columns), position at right-click location or near selection
+        const mouseX = parseInt(menu.dataset.mouseX) || (editorRect.left + bounds.left + bounds.width);
+        const mouseY = parseInt(menu.dataset.mouseY) || (editorRect.top + bounds.top);
 
-    let top = editorRect.top + bounds.top - menuHeight - 10; // 10px gap above selection
-    let left = margin;
+        const menuWidth = 160; // Width for 3-column grid menu (3 * 46px + gaps + padding)
+        const menuHeight = 400; // Max height for vertical menu
+        const margin = 10;
 
-    // Check if menu would go above viewport
-    if (top < 10) {
-        // Position below selection instead
-        top = editorRect.top + bounds.bottom + 10;
+        let left = mouseX + 10; // 10px to the right of cursor
+        let top = mouseY;
+
+        // Check if menu would go beyond right edge
+        if (left + menuWidth > window.innerWidth - margin) {
+            left = mouseX - menuWidth - 10; // Position to the left of cursor
+        }
+
+        // Check if menu would go beyond bottom edge
+        if (top + menuHeight > window.innerHeight - margin) {
+            top = window.innerHeight - menuHeight - margin;
+        }
+
+        // Check if menu would go above viewport
+        if (top < margin) {
+            top = margin;
+        }
+
+        menu.style.top = `${top}px`;
+        menu.style.left = `${left}px`;
+        menu.style.width = `${menuWidth}px`;
+        menu.style.maxHeight = `${menuHeight}px`;
+    } else {
+        // Mobile: horizontal menu, full width
+        const menuHeight = 60;
+        const margin = 10;
+        const menuWidth = window.innerWidth - (margin * 2);
+
+        let top = editorRect.top + bounds.top - menuHeight - 10;
+        let left = margin;
+
+        // Check if menu would go above viewport
+        if (top < 10) {
+            top = editorRect.top + bounds.bottom + 10;
+        }
+
+        menu.style.top = `${top}px`;
+        menu.style.left = `${left}px`;
+        menu.style.width = `${menuWidth}px`;
+        menu.style.maxHeight = 'none';
     }
-
-    // Apply position
-    menu.style.top = `${top}px`;
-    menu.style.left = `${left}px`;
-    menu.style.width = `${menuWidth}px`;
 }
 
 // Update active button states based on current format
@@ -539,7 +660,12 @@ function updateActiveButtons(quillInstance, menu) {
                 break;
 
             case 'header':
-                if (format.header && format.header === parseInt(btnValue)) {
+                if (btnValue === 'false') {
+                    // Highlight normal text button when no header is active
+                    if (!format.header) {
+                        btn.classList.add('active');
+                    }
+                } else if (format.header && format.header === parseInt(btnValue)) {
                     btn.classList.add('active');
                 }
                 break;
@@ -570,6 +696,43 @@ function updateActiveButtons(quillInstance, menu) {
                 break;
         }
     });
+}
+
+// Setup fixed positioning for Quill toolbar dropdowns
+function setupQuillDropdownPositioning() {
+    // Observe the DOM for picker expansions
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                const picker = mutation.target;
+                if (picker.classList.contains('ql-picker') && picker.classList.contains('ql-expanded')) {
+                    const options = picker.querySelector('.ql-picker-options');
+                    if (options) {
+                        const rect = picker.getBoundingClientRect();
+                        options.style.top = `${rect.bottom + 6}px`;
+                        options.style.left = `${rect.left}px`;
+                    }
+                }
+            }
+        });
+    });
+
+    // Observe all pickers
+    const observePickers = () => {
+        const pickers = document.querySelectorAll('.ql-picker');
+        pickers.forEach(picker => {
+            observer.observe(picker, {
+                attributes: true,
+                attributeFilter: ['class']
+            });
+        });
+    };
+
+    // Initial observation
+    observePickers();
+
+    // Re-observe when new pickers are added (e.g., new editor instances)
+    setTimeout(observePickers, 1000);
 }
 
 // Open a project in detail view
@@ -3312,11 +3475,79 @@ function initStudyMode() {
                 const swipeThreshold = isTouchDevice ? 100 : 50;
 
                 if (diffX > swipeThreshold) {
-                    // Swipe right - go to previous card (skip animation for smooth swipe)
-                    navigateStudyMode(-1, true);
+                    // Swipe right - go to previous card or show boundary animation
+                    const isFirstCard = studyModeState.currentIndex === 0;
+
+                    if (isFirstCard) {
+                        // Show boundary feedback - can't go back further
+                        if (activeCard) {
+                            activeCard.style.transform = '';
+                            activeCard.style.opacity = '';
+                            activeCard.classList.remove('study-card-boundary-right');
+                            activeCard.classList.add('study-card-boundary-right');
+
+                            // Add haptic feedback if available
+                            if (navigator.vibrate) {
+                                navigator.vibrate([50, 30, 50]);
+                            }
+
+                            setTimeout(() => {
+                                activeCard.classList.remove('study-card-boundary-right');
+                            }, 500);
+                        }
+                    } else {
+                        // Continue the swipe animation off screen, then navigate
+                        if (activeCard) {
+                            const currentTransform = diffX;
+                            activeCard.style.transition = 'transform 0.2s ease-out, opacity 0.2s ease-out';
+                            activeCard.style.transform = `translateX(${window.innerWidth}px) rotate(${currentTransform / 20}deg)`;
+                            activeCard.style.opacity = '0';
+
+                            setTimeout(() => {
+                                activeCard.style.transition = '';
+                                activeCard.style.transform = '';
+                                activeCard.style.opacity = '';
+                                navigateStudyMode(-1, true);
+                            }, 200);
+                        }
+                    }
                 } else if (diffX < -swipeThreshold) {
-                    // Swipe left - go to next card (skip animation for smooth swipe)
-                    navigateStudyMode(1, true);
+                    // Swipe left - go to next card or show boundary animation
+                    const isLastCard = studyModeState.currentIndex === studyModeState.cards.length - 1;
+
+                    if (isLastCard) {
+                        // Show boundary feedback - no more cards
+                        if (activeCard) {
+                            activeCard.style.transform = '';
+                            activeCard.style.opacity = '';
+                            activeCard.classList.remove('study-card-boundary-left');
+                            activeCard.classList.add('study-card-boundary-left');
+
+                            // Add haptic feedback if available
+                            if (navigator.vibrate) {
+                                navigator.vibrate([50, 30, 50]);
+                            }
+
+                            setTimeout(() => {
+                                activeCard.classList.remove('study-card-boundary-left');
+                            }, 500);
+                        }
+                    } else {
+                        // Continue the swipe animation off screen, then navigate
+                        if (activeCard) {
+                            const currentTransform = diffX;
+                            activeCard.style.transition = 'transform 0.2s ease-out, opacity 0.2s ease-out';
+                            activeCard.style.transform = `translateX(-${window.innerWidth}px) rotate(${currentTransform / 20}deg)`;
+                            activeCard.style.opacity = '0';
+
+                            setTimeout(() => {
+                                activeCard.style.transition = '';
+                                activeCard.style.transform = '';
+                                activeCard.style.opacity = '';
+                                navigateStudyMode(1, true);
+                            }, 200);
+                        }
+                    }
                 } else {
                     // Reset position if swipe wasn't far enough
                     if (activeCard) {
