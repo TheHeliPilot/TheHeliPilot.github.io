@@ -3227,6 +3227,12 @@ select:hover,
     #studyModePage .page-header {
         margin-bottom: var(--spacing-md) !important;
         padding-bottom: var(--spacing-sm) !important;
+        justify-content: center !important;
+        text-align: center !important;
+    }
+
+    #studyModeTitle {
+        text-align: center !important;
     }
 
     /* Study card container - prevent overflow */

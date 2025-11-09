@@ -3481,19 +3481,26 @@ function initStudyMode() {
                     if (isFirstCard) {
                         // Show boundary feedback - can't go back further
                         if (activeCard) {
+                            // First, quickly return from swiped position to center
+                            activeCard.style.transition = 'transform 0.06s ease-out, opacity 0.06s ease-out';
                             activeCard.style.transform = '';
                             activeCard.style.opacity = '';
-                            activeCard.classList.remove('study-card-boundary-right');
-                            activeCard.classList.add('study-card-boundary-right');
 
-                            // Add haptic feedback if available
-                            if (navigator.vibrate) {
-                                navigator.vibrate([50, 30, 50]);
-                            }
-
+                            // After return animation, play bounce
                             setTimeout(() => {
+                                activeCard.style.transition = '';
                                 activeCard.classList.remove('study-card-boundary-right');
-                            }, 500);
+                                activeCard.classList.add('study-card-boundary-right');
+
+                                // Add haptic feedback if available
+                                if (navigator.vibrate) {
+                                    navigator.vibrate([50, 30, 50]);
+                                }
+
+                                setTimeout(() => {
+                                    activeCard.classList.remove('study-card-boundary-right');
+                                }, 500);
+                            }, 60);
                         }
                     } else {
                         // Continue the swipe animation off screen, then navigate
@@ -3518,19 +3525,26 @@ function initStudyMode() {
                     if (isLastCard) {
                         // Show boundary feedback - no more cards
                         if (activeCard) {
+                            // First, quickly return from swiped position to center
+                            activeCard.style.transition = 'transform 0.06s ease-out, opacity 0.06s ease-out';
                             activeCard.style.transform = '';
                             activeCard.style.opacity = '';
-                            activeCard.classList.remove('study-card-boundary-left');
-                            activeCard.classList.add('study-card-boundary-left');
 
-                            // Add haptic feedback if available
-                            if (navigator.vibrate) {
-                                navigator.vibrate([50, 30, 50]);
-                            }
-
+                            // After return animation, play bounce
                             setTimeout(() => {
+                                activeCard.style.transition = '';
                                 activeCard.classList.remove('study-card-boundary-left');
-                            }, 500);
+                                activeCard.classList.add('study-card-boundary-left');
+
+                                // Add haptic feedback if available
+                                if (navigator.vibrate) {
+                                    navigator.vibrate([50, 30, 50]);
+                                }
+
+                                setTimeout(() => {
+                                    activeCard.classList.remove('study-card-boundary-left');
+                                }, 500);
+                            }, 60);
                         }
                     } else {
                         // Continue the swipe animation off screen, then navigate
