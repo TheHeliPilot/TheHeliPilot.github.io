@@ -196,6 +196,20 @@ body {
     overflow: visible;
     letter-spacing: 0.2px;
     box-shadow: var(--shadow-sm);
+    text-align: center;
+}
+
+.btn i,
+.btn span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Fix button text centering with equal padding */
+#addNoteFileBtn {
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
 }
 
 .btn:disabled {
@@ -1001,6 +1015,9 @@ select:hover,
     position: relative;
     box-shadow: var(--shadow-sm);
     overflow: hidden;
+    min-height: 140px;
+    display: flex;
+    flex-direction: column;
 }
 
 .project-card:hover {
@@ -1018,7 +1035,13 @@ select:hover,
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    margin-bottom: var(--spacing-md);
+    gap: var(--spacing-md);
+    flex-shrink: 0;
+}
+
+.project-header > div:first-child {
+    flex: 1;
+    min-width: 0;
 }
 
 .project-title {
@@ -1026,6 +1049,17 @@ select:hover,
     font-weight: 600;
     color: var(--text-primary);
     margin-bottom: var(--spacing-xs);
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    line-height: 1.4;
+    max-width: 100%;
+}
+
+.project-card p {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
 }
 
 .project-stats {
@@ -1036,7 +1070,7 @@ select:hover,
 .project-actions {
     display: flex;
     gap: var(--spacing-sm);
-    opacity: 0;
+    opacity: 1;
     transition: opacity var(--transition-base);
 }
 

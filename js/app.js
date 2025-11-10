@@ -489,7 +489,7 @@ async function updateDashboard() {
                 <div class="project-header">
                     <div>
                         <div class="project-title">${escapeHtml(project.name)}</div>
-                        <div class="project-stats">${getProjectCardCount(project.id)} cards</div>
+                        <div class="project-stats">${getProjectStats(project)}</div>
                     </div>
                 </div>
             </div>
@@ -519,7 +519,7 @@ function renderProjects() {
             <div class="project-header">
                 <div>
                     <div class="project-title">${escapeHtml(project.name)}</div>
-                    <div class="project-stats">${getProjectCardCount(project.id)} cards${project.studyCardsCount ? ` • ${project.studyCardsCount} study cards` : ''}</div>
+                    <div class="project-stats">${getProjectStats(project)}</div>
                 </div>
                 <div class="project-actions" onclick="event.stopPropagation()">
                     <button class="project-action-btn" onclick="window.editProject('${project.id}')" title="Edit Project">
@@ -530,7 +530,6 @@ function renderProjects() {
                     </button>
                 </div>
             </div>
-            ${project.description ? `<p style="color: var(--text-secondary); margin-top: 0.5rem;">${escapeHtml(project.description)}</p>` : ''}
         </div>
     `).join('');
 }
@@ -539,19 +538,43 @@ function initProjects() {
     const createProjectBtn = document.getElementById('createProjectBtn');
     const saveProjectBtn = document.getElementById('saveProjectBtn');
 
+    // Character counter and warning for project name
+    const projectNameInput = document.getElementById('projectNameInput');
+    const projectNameCounter = document.getElementById('projectNameCounter');
+    const projectNameCounterText = document.getElementById('projectNameCounterText');
+    const projectNameWarningIcon = document.getElementById('projectNameWarningIcon');
+
+    projectNameInput.addEventListener('input', () => {
+        const length = projectNameInput.value.length;
+        const maxLength = 48;
+
+        projectNameCounterText.textContent = `${length}/${maxLength} characters`;
+
+        if (length >= maxLength) {
+            projectNameWarningIcon.style.display = 'inline';
+            projectNameCounter.style.color = 'var(--danger)';
+        } else {
+            projectNameWarningIcon.style.display = 'none';
+            projectNameCounter.style.color = 'var(--text-muted)';
+        }
+    });
+
     createProjectBtn.addEventListener('click', () => {
         editingProject = null;
         document.getElementById('projectModalTitle').textContent = 'Create Project';
         document.getElementById('projectNameInput').value = '';
-        document.getElementById('projectDescInput').value = '';
         document.getElementById('projectColorInput').value = '#1db954';
+
+        // Reset counters
+        projectNameCounterText.textContent = '0/48 characters';
+        projectNameCounter.style.color = 'var(--text-muted)';
+        projectNameWarningIcon.style.display = 'none';
 
         openModal('projectModal');
     });
 
     saveProjectBtn.addEventListener('click', async () => {
-        const name = document.getElementById('projectNameInput').value.trim();
-        const description = document.getElementById('projectDescInput').value.trim();
+        let name = document.getElementById('projectNameInput').value.trim();
         const color = document.getElementById('projectColorInput').value;
 
         if (!name) {
@@ -559,10 +582,15 @@ function initProjects() {
             return;
         }
 
+        // Enforce character limits (security measure)
+        if (name.length > 48) {
+            name = name.substring(0, 48);
+            showNotification('Project name was trimmed to 48 characters', 'warning');
+        }
+
         try {
             const projectData = {
                 name,
-                description,
                 color,
                 createdAt: Date.now()
             };
@@ -595,7 +623,6 @@ window.editProject = async function(projectId) {
     editingProject = projectId;
     document.getElementById('projectModalTitle').textContent = 'Edit Project';
     document.getElementById('projectNameInput').value = project.name;
-    document.getElementById('projectDescInput').value = project.description || '';
     document.getElementById('projectColorInput').value = project.color || '#1db954';
 
     openModal('projectModal');
@@ -666,6 +693,12 @@ function updateProjectSelects() {
 
 function getProjectCardCount(projectId) {
     return cards.filter(c => c.projectId === projectId).length;
+}
+
+function getProjectStats(project) {
+    const testCardsCount = getProjectCardCount(project.id);
+    const studyCardsCount = project.studyCardsCount || 0;
+    return `${testCardsCount} test cards • ${studyCardsCount} study cards`;
 }
 
 // ============================================

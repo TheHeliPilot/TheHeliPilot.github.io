@@ -1085,11 +1085,11 @@
             <div class="modal-body">
                 <div class="form-group">
                     <label>Project Name</label>
-                    <input type="text" id="projectNameInput" class="text-input" placeholder="e.g., Biology 101">
-                </div>
-                <div class="form-group">
-                    <label>Description (optional)</label>
-                    <textarea id="projectDescInput" class="text-input" rows="3" placeholder="What's this project about?"></textarea>
+                    <input type="text" id="projectNameInput" class="text-input" placeholder="e.g., Biology 101" maxlength="48">
+                    <div id="projectNameCounter" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">
+                        <i id="projectNameWarningIcon" class="fas fa-exclamation-triangle" style="display: none; margin-right: 0.25rem;"></i>
+                        <span id="projectNameCounterText">0/48 characters</span>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>Color</label>

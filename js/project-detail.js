@@ -152,8 +152,23 @@ function setupProjectDetailEventListeners() {
     const regenerateBtn = document.getElementById('regenerateProjectBtn');
     if (regenerateBtn) {
         regenerateBtn.addEventListener('click', () => {
-            openModal('regenerateModal');
+            console.log('Regenerate button clicked');
+            if (typeof window.openModal === 'function') {
+                window.openModal('regenerateModal');
+            } else {
+                console.error('openModal function not found');
+                // Fallback: directly toggle modal
+                const modal = document.getElementById('regenerateModal');
+                if (modal) {
+                    modal.classList.remove('hidden');
+                    document.body.style.overflow = 'hidden';
+                } else {
+                    console.error('regenerateModal element not found');
+                }
+            }
         });
+    } else {
+        console.error('regenerateProjectBtn not found');
     }
 
     // Confirm regenerate button in modal
