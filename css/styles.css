@@ -891,10 +891,16 @@ select:hover,
 
 /* === DASHBOARD === */
 .dashboard-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: var(--spacing-lg);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-md);
     margin-bottom: var(--spacing-xl);
+}
+
+.dashboard-grid .stat-card {
+    flex: 1 1 150px;
+    min-width: 150px;
+    max-width: 100%;
 }
 
 .stat-card {
@@ -994,6 +1000,14 @@ select:hover,
 /* Recent Projects Section */
 .section:nth-of-type(2) {
     border-left: 3px solid var(--primary);
+}
+
+/* Difficulty Grid */
+.difficulty-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-top: 1rem;
 }
 
 /* === PROJECTS === */
@@ -2335,10 +2349,6 @@ select:hover,
         grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
     }
 
-    .dashboard-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
     /* Project Detail Page Tablet */
     .notes-toolbar {
         grid-template-columns: 1fr;
@@ -2411,6 +2421,11 @@ select:hover,
         display: block;
     }
 
+    /* Difficulty Grid - Column layout */
+    .difficulty-grid {
+        grid-template-columns: 1fr;
+    }
+
     /* Sidebar mobile behavior */
     .sidebar {
         position: fixed;
@@ -2469,12 +2484,6 @@ select:hover,
     /* Page adjustments */
     .page {
         padding: var(--spacing-md);
-    }
-
-    /* Dashboard grid - single column on mobile */
-    .dashboard-grid {
-        grid-template-columns: 1fr;
-        gap: var(--spacing-md);
     }
 
     /* Page header - stack vertically */
@@ -4842,17 +4851,6 @@ select:hover,
 @media (max-width: 480px) {
     .top-bar h2 {
         font-size: 1.125rem;
-    }
-
-    .dashboard-grid {
-        grid-template-columns: repeat(2, 1fr);
-        gap: var(--spacing-sm);
-    }
-
-    .dashboard-grid .stat-card:nth-child(odd):last-child {
-        grid-column: 1 / -1;
-        max-width: calc(50% - var(--spacing-sm) / 2);
-        margin: 0 auto;
     }
 
     .stat-card {
