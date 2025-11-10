@@ -1,6 +1,5 @@
-// Quill editor instances
-let quillEditor = null;  // Main editor (deprecated, keeping for compatibility)
-let fullscreenQuillEditor = null;  // Fullscreen editor
+// Markdown editor state
+let markdownEditor = null;  // Markdown textarea element
 let currentProject = null;
 let currentNoteFile = null;  // Currently open note file
 let autoSaveTimeout = null;
@@ -9,63 +8,32 @@ let noteSortOrder = 'date';  // Default sort: by date (newest first)
 
 // Initialize the project detail page
 export function initProjectDetailPage() {
-    // Initialize Quill editor when DOM is ready
-    if (typeof Quill !== 'undefined' && !quillEditor) {
-        const editorElement = document.getElementById('notesEditor');
-        if (editorElement) {
-            quillEditor = new Quill('#notesEditor', {
-                theme: 'snow',
-                placeholder: 'Write your notes here...',
-                modules: {
-                    toolbar: [
-                        [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
-                        ['bold', 'italic', 'underline', 'strike'],
-                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                        [{ 'color': [] }, { 'background': [] }],
-                        [{ 'align': [] }],
-                        ['link', 'image', 'code-block'],
-                        ['clean']
-                    ]
-                }
-            });
-        }
+    // Initialize Markdown editor
+    markdownEditor = document.getElementById('markdownEditor');
+
+    if (markdownEditor) {
+        // Auto-save on editor input
+        markdownEditor.addEventListener('input', () => {
+            if (currentNoteFile) {
+                markNoteAsUnsavedFullscreen();
+                scheduleAutoSave();
+            }
+        });
+
+        // Setup toolbar buttons
+        setupMarkdownToolbar();
+
+        // Keyboard shortcuts
+        markdownEditor.addEventListener('keydown', handleMarkdownShortcuts);
+
+        // Handle tab key for indentation
+        markdownEditor.addEventListener('keydown', (e) => {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                insertAtCursor('    '); // 4 spaces
+            }
+        });
     }
-
-    // Initialize fullscreen Quill editor
-    if (typeof Quill !== 'undefined' && !fullscreenQuillEditor) {
-        const fullscreenEditorElement = document.getElementById('fullscreenNotesEditor');
-        if (fullscreenEditorElement) {
-            fullscreenQuillEditor = new Quill('#fullscreenNotesEditor', {
-                theme: 'snow',
-                placeholder: 'Start writing your notes...',
-                modules: {
-                    toolbar: [
-                        [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
-                        ['bold', 'italic', 'underline', 'strike'],
-                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                        [{ 'color': [] }, { 'background': [] }],
-                        [{ 'align': [] }],
-                        ['link', 'image', 'code-block'],
-                        ['clean']
-                    ]
-                }
-            });
-
-            // Auto-save on fullscreen editor change
-            fullscreenQuillEditor.on('text-change', () => {
-                if (currentNoteFile) {
-                    markNoteAsUnsavedFullscreen();
-                    scheduleAutoSave();
-                }
-            });
-        }
-    }
-
-    // Setup mobile selection menu for fullscreen editor
-    setupMobileSelectionMenu(fullscreenQuillEditor);
-
-    // Setup fixed positioning for Quill dropdowns
-    setupQuillDropdownPositioning();
 
     setupProjectDetailEventListeners();
 }
@@ -1244,10 +1212,8 @@ function renderNoteFilesList() {
 
     container.innerHTML = sortedFiles.map(file => {
         const isActive = currentNoteFile && currentNoteFile.id === file.id;
-        // Get content preview
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = file.content || '';
-        const contentPreview = (tempDiv.textContent || tempDiv.innerText || 'Empty note').substring(0, 120);
+        // Get content preview (Markdown text)
+        const contentPreview = (file.content || 'Empty note').substring(0, 120);
 
         return `
         <div class="note-file-card" data-file-id="${file.id}"
@@ -1428,9 +1394,9 @@ function openNoteFileFullscreen(fileId) {
         mobileTitle.value = file.title || 'Untitled Note';
     }
 
-    // Load content into fullscreen editor
-    if (fullscreenQuillEditor) {
-        fullscreenQuillEditor.root.innerHTML = file.content || '';
+    // Load content into Markdown editor
+    if (markdownEditor) {
+        markdownEditor.value = file.content || '';
     }
 
     // Update sidebar project name
@@ -1572,8 +1538,9 @@ async function switchNoteFileInFullscreen(fileId) {
         mobileTitle.value = file.title || 'Untitled Note';
     }
 
-    if (fullscreenQuillEditor) {
-        fullscreenQuillEditor.root.innerHTML = file.content || '';
+    // Load content into Markdown editor
+    if (markdownEditor) {
+        markdownEditor.value = file.content || '';
     }
 
     // Update UI
@@ -1646,7 +1613,7 @@ async function saveCurrentNoteFileFullscreen() {
     try {
         const titleInput = document.getElementById('fullscreenNoteTitle');
         const title = titleInput ? titleInput.value.trim() : currentNoteFile.title;
-        const content = fullscreenQuillEditor ? fullscreenQuillEditor.root.innerHTML : '';
+        const content = markdownEditor ? markdownEditor.value : '';
 
         // Update current file
         const fileIndex = currentProject.noteFiles.findIndex(f => f.id === currentNoteFile.id);
@@ -4538,7 +4505,164 @@ window.closeProjectTest = function() {
     }
 };
 
-export { quillEditor, currentProject };
+// ============================================
+// MARKDOWN EDITOR FUNCTIONS
+// ============================================
+
+// Setup Markdown toolbar buttons
+function setupMarkdownToolbar() {
+    const toolbar = document.getElementById('markdownToolbar');
+    if (!toolbar) return;
+
+    const buttons = toolbar.querySelectorAll('.md-btn[data-action]');
+    buttons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const action = btn.dataset.action;
+            applyMarkdownFormat(action);
+        });
+    });
+}
+
+// Apply Markdown formatting
+function applyMarkdownFormat(action) {
+    if (!markdownEditor) return;
+
+    const start = markdownEditor.selectionStart;
+    const end = markdownEditor.selectionEnd;
+    const selectedText = markdownEditor.value.substring(start, end);
+    const beforeText = markdownEditor.value.substring(0, start);
+    const afterText = markdownEditor.value.substring(end);
+
+    let newText = '';
+    let cursorOffset = 0;
+
+    switch (action) {
+        case 'bold':
+            newText = `**${selectedText || 'bold text'}**`;
+            cursorOffset = selectedText ? newText.length : 2;
+            break;
+        case 'italic':
+            newText = `*${selectedText || 'italic text'}*`;
+            cursorOffset = selectedText ? newText.length : 1;
+            break;
+        case 'strikethrough':
+            newText = `~~${selectedText || 'strikethrough text'}~~`;
+            cursorOffset = selectedText ? newText.length : 2;
+            break;
+        case 'h1':
+            newText = `# ${selectedText || 'Heading 1'}`;
+            cursorOffset = newText.length;
+            break;
+        case 'h2':
+            newText = `## ${selectedText || 'Heading 2'}`;
+            cursorOffset = newText.length;
+            break;
+        case 'h3':
+            newText = `### ${selectedText || 'Heading 3'}`;
+            cursorOffset = newText.length;
+            break;
+        case 'quote':
+            newText = `> ${selectedText || 'Quote'}`;
+            cursorOffset = newText.length;
+            break;
+        case 'code':
+            newText = `\`${selectedText || 'code'}\``;
+            cursorOffset = selectedText ? newText.length : 1;
+            break;
+        case 'codeblock':
+            newText = `\`\`\`\n${selectedText || '// Code here'}\n\`\`\``;
+            cursorOffset = selectedText ? 4 + selectedText.length : 4;
+            break;
+        case 'ul':
+            newText = `- ${selectedText || 'List item'}`;
+            cursorOffset = newText.length;
+            break;
+        case 'ol':
+            newText = `1. ${selectedText || 'List item'}`;
+            cursorOffset = newText.length;
+            break;
+        case 'task':
+            newText = `- [ ] ${selectedText || 'Task item'}`;
+            cursorOffset = newText.length;
+            break;
+        case 'link':
+            const url = prompt('Enter URL:', 'https://');
+            if (url) {
+                newText = `[${selectedText || 'link text'}](${url})`;
+                cursorOffset = selectedText ? newText.length : 1;
+            } else {
+                return;
+            }
+            break;
+        case 'image':
+            const imgUrl = prompt('Enter image URL:', 'https://');
+            if (imgUrl) {
+                newText = `![${selectedText || 'alt text'}](${imgUrl})`;
+                cursorOffset = newText.length;
+            } else {
+                return;
+            }
+            break;
+        case 'table':
+            newText = `| Column 1 | Column 2 | Column 3 |\n| -------- | -------- | -------- |\n| Cell 1   | Cell 2   | Cell 3   |`;
+            cursorOffset = newText.length;
+            break;
+        case 'hr':
+            newText = '\n---\n';
+            cursorOffset = newText.length;
+            break;
+        default:
+            return;
+    }
+
+    markdownEditor.value = beforeText + newText + afterText;
+    markdownEditor.focus();
+    markdownEditor.selectionStart = markdownEditor.selectionEnd = start + cursorOffset;
+
+    // Trigger input event for auto-save
+    markdownEditor.dispatchEvent(new Event('input'));
+}
+
+// Insert text at cursor position
+function insertAtCursor(text) {
+    if (!markdownEditor) return;
+
+    const start = markdownEditor.selectionStart;
+    const end = markdownEditor.selectionEnd;
+    const beforeText = markdownEditor.value.substring(0, start);
+    const afterText = markdownEditor.value.substring(end);
+
+    markdownEditor.value = beforeText + text + afterText;
+    markdownEditor.selectionStart = markdownEditor.selectionEnd = start + text.length;
+    markdownEditor.focus();
+
+    // Trigger input event
+    markdownEditor.dispatchEvent(new Event('input'));
+}
+
+// Handle keyboard shortcuts
+function handleMarkdownShortcuts(e) {
+    if (e.ctrlKey || e.metaKey) {
+        switch (e.key.toLowerCase()) {
+            case 'b':
+                e.preventDefault();
+                applyMarkdownFormat('bold');
+                break;
+            case 'i':
+                e.preventDefault();
+                applyMarkdownFormat('italic');
+                break;
+            case 'k':
+                e.preventDefault();
+                applyMarkdownFormat('link');
+                break;
+        }
+    }
+}
+
+
+export { markdownEditor, currentProject };
 
 // Initialize when DOM is loaded
 if (document.readyState === 'loading') {

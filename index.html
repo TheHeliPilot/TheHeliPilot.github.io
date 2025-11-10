@@ -6,9 +6,11 @@
     <title>AI Quiz Generator</title>
     <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <!-- Quill Rich Text Editor -->
-    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
-    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+    <!-- Markdown Editor Libraries -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.8/purify.min.js"></script>
 </head>
 <body>
     <!-- Authentication Page -->
@@ -750,7 +752,41 @@
                             <!-- Mobile title (hidden on desktop) -->
                             <input type="text" id="mobileNoteTitle" placeholder="Untitled Note" style="display: none;">
                             <div style="max-width: 900px; margin: 0 auto; padding: 3rem 2rem;">
-                                <div id="fullscreenNotesEditor" style="min-height: 500px; background: var(--surface);  padding: 2rem; box-shadow: var(--shadow-md);"></div>
+                                <div id="markdownEditorContainer" style="min-height: 500px; background: var(--surface); border-radius: 8px; box-shadow: var(--shadow-md); overflow: hidden;">
+                                    <!-- Markdown Toolbar (inside editor) -->
+                                    <div id="markdownToolbar" style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); background: var(--surface-light); display: flex; align-items: center; gap: 0.25rem; flex-wrap: wrap;">
+                                        <button class="md-btn" data-action="bold" title="Bold (Ctrl+B)"><i class="fas fa-bold"></i></button>
+                                        <button class="md-btn" data-action="italic" title="Italic (Ctrl+I)"><i class="fas fa-italic"></i></button>
+                                        <button class="md-btn" data-action="strikethrough" title="Strikethrough"><i class="fas fa-strikethrough"></i></button>
+                                        <div class="toolbar-divider"></div>
+                                        <button class="md-btn" data-action="h1" title="Heading 1">H1</button>
+                                        <button class="md-btn" data-action="h2" title="Heading 2">H2</button>
+                                        <button class="md-btn" data-action="h3" title="Heading 3">H3</button>
+                                        <div class="toolbar-divider"></div>
+                                        <button class="md-btn" data-action="quote" title="Quote"><i class="fas fa-quote-right"></i></button>
+                                        <button class="md-btn" data-action="code" title="Inline Code"><i class="fas fa-code"></i></button>
+                                        <button class="md-btn" data-action="codeblock" title="Code Block"><i class="fas fa-file-code"></i></button>
+                                        <div class="toolbar-divider"></div>
+                                        <button class="md-btn" data-action="ul" title="Bullet List"><i class="fas fa-list-ul"></i></button>
+                                        <button class="md-btn" data-action="ol" title="Numbered List"><i class="fas fa-list-ol"></i></button>
+                                        <button class="md-btn" data-action="task" title="Task List"><i class="fas fa-tasks"></i></button>
+                                        <div class="toolbar-divider"></div>
+                                        <button class="md-btn" data-action="link" title="Link (Ctrl+K)"><i class="fas fa-link"></i></button>
+                                        <button class="md-btn" data-action="image" title="Image"><i class="fas fa-image"></i></button>
+                                        <button class="md-btn" data-action="table" title="Table"><i class="fas fa-table"></i></button>
+                                        <div class="toolbar-divider"></div>
+                                        <button class="md-btn" data-action="hr" title="Horizontal Rule"><i class="fas fa-minus"></i></button>
+                                    </div>
+
+                                    <!-- Markdown Editor -->
+                                    <div>
+                                        <textarea id="markdownEditor" placeholder="Start writing in Markdown..."
+                                            style="width: 100%; min-height: 500px; background: var(--surface); border: none;
+                                                   padding: 2rem; font-family: 'JetBrains Mono', 'Consolas', 'Monaco', 'Courier New', monospace;
+                                                   font-size: 0.95rem; line-height: 1.7; color: var(--text); resize: vertical;
+                                                   outline: none; box-sizing: border-box;"></textarea>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -809,13 +845,10 @@
                     </div>
                 </div>
 
-                <div class="account-section">
-                    <h3>AI API Keys <span style="color: var(--text-muted); font-size: 0.875rem; font-weight: normal;">(Free users only)</span></h3>
+                <div id="apiKeysSection" class="account-section">
+                    <h3>AI API Keys <span style="color: var(--primary); font-size: 0.875rem; font-weight: normal;">(Pro users only)</span></h3>
                     <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1rem;">
-                        Add your AI API keys to enable automatic card generation. Your keys are stored locally and never shared.
-                    </p>
-                    <p id="proUserNote" class="hidden" style="color: var(--primary); font-size: 0.875rem; margin-bottom: 1rem; padding: 0.75rem; background: rgba(29, 185, 84, 0.1); border-radius: var(--radius-md);">
-                        <i class="fas fa-crown"></i> You're a Pro user! Use the Auto Generate feature without entering API keys.
+                        Add your AI API keys to use your own API accounts for card generation. Your keys are stored locally and never shared.
                     </p>
 
                     <div class="form-group">

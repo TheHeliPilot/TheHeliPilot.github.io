@@ -258,6 +258,7 @@ function initNavigation() {
 
 async function loadUserData() {
     await loadProStatus();
+    setupProStatusListener(); // Set up real-time listener for pro status changes
     await Promise.all([
         loadProjects(),
         loadCards()
@@ -266,10 +267,63 @@ async function loadUserData() {
     await updateProUI(); // Update UI with generation limits
 }
 
+// Set up real-time listener for pro status changes
+function setupProStatusListener() {
+    if (!currentUser) return;
+
+    const proRef = ref(window.db, `users/${currentUser.uid}/isPro`);
+
+    // Listen for changes to pro status
+    onValue(proRef, (snapshot) => {
+        const previousProStatus = window.isProUser;
+        const newProStatus = snapshot.exists() ? snapshot.val() : false;
+
+        // Only process if status actually changed
+        if (previousProStatus !== newProStatus) {
+            console.log('Pro status changed in real-time:', { from: previousProStatus, to: newProStatus });
+
+            window.isProUser = newProStatus;
+            isProUser = newProStatus;
+
+            // If user lost pro status, clear API keys
+            if (previousProStatus === true && newProStatus === false) {
+                console.log('User lost pro status (real-time) - clearing API keys');
+                clearAllAPIKeys();
+                showNotification('Your Pro membership has ended. Your saved API keys have been cleared and disabled.', 'info');
+
+                // Update account page if user is currently viewing it
+                const accountPage = document.getElementById('account');
+                if (accountPage && !accountPage.classList.contains('hidden')) {
+                    loadAccountPage();
+                }
+            }
+
+            // If user gained pro status, clear previous keys (if any)
+            if (previousProStatus === false && newProStatus === true) {
+                console.log('User gained pro status (real-time) - clearing any old API keys');
+                clearAllAPIKeys();
+                showNotification('Welcome to Pro! You can now use our premium API or add your own API keys.', 'success');
+
+                // Update account page if user is currently viewing it
+                const accountPage = document.getElementById('account');
+                if (accountPage && !accountPage.classList.contains('hidden')) {
+                    loadAccountPage();
+                }
+            }
+
+            // Update UI elements
+            updateProUI();
+        }
+    });
+}
+
 async function loadProStatus() {
     if (!currentUser) return;
 
     try {
+        // Store previous pro status to detect changes
+        const previousProStatus = window.isProUser || false;
+
         const proRef = ref(window.db, `users/${currentUser.uid}/isPro`);
         const devRef = ref(window.db, `users/${currentUser.uid}/isDev`);
         const adminRef = ref(window.db, `users/${currentUser.uid}/isAdmin`);
@@ -288,6 +342,19 @@ async function loadProStatus() {
         isAdminUser = window.isAdminUser;
 
         console.log('User status loaded:', { isProUser, isDevUser, isAdminUser });
+
+        // Check if pro status changed from true to false (user lost pro status)
+        if (previousProStatus === true && window.isProUser === false) {
+            console.log('User lost pro status - clearing API keys');
+            clearAllAPIKeys();
+            showNotification('Your Pro membership has ended. Your saved API keys have been cleared and disabled.', 'info');
+        }
+
+        // If user just became pro, clear any old API keys (fresh start)
+        if (previousProStatus === false && window.isProUser === true) {
+            console.log('User gained pro status - clearing any old API keys');
+            clearAllAPIKeys();
+        }
 
         updateProUI();
         updateDevUI();
@@ -1082,7 +1149,13 @@ function initAI() {
                 cards = data.cards;
 
             } else {
-                // Free users: Use their own API keys
+                // Pro users: Can use their own API keys
+                // Free users: Blocked from using API keys
+                if (!isProUser) {
+                    showNotification('Personal API keys are only available for Pro users. Please upgrade or use the Pro API.', 'error');
+                    return;
+                }
+
                 const apiKey = getAPIKey(provider);
                 if (!apiKey) {
                     showNotification(`Please add your ${provider.toUpperCase()} API key in Account settings first`, 'error');
@@ -1445,6 +1518,17 @@ function setAPIKey(provider, key) {
     }
 }
 
+// Clear all API keys (used when user becomes pro or loses pro status)
+function clearAllAPIKeys() {
+    localStorage.removeItem('apiKey_openai');
+    localStorage.removeItem('apiKey_claude');
+    localStorage.removeItem('apiKey_gemini');
+    // Also clear legacy key names if they exist
+    localStorage.removeItem('claudeApiKey');
+    localStorage.removeItem('openaiApiKey');
+    console.log('All API keys cleared from localStorage');
+}
+
 // Generation limits for Pro users
 async function checkGenerationLimit() {
     if (!currentUser) return false;
@@ -1658,40 +1742,46 @@ function loadAccountPage() {
     const proStatusCard = document.getElementById('proStatus');
     const proStatusTitle = document.getElementById('proStatusTitle');
     const proStatusDesc = document.getElementById('proStatusDesc');
-    const proUserNote = document.getElementById('proUserNote');
+    const apiKeysSection = document.getElementById('apiKeysSection');
 
     if (isProUser) {
         proStatusCard.classList.add('is-pro');
         proStatusTitle.textContent = 'Pro Member ⭐';
-        proStatusDesc.textContent = 'You have unlimited access to AI-generated cards using our premium API!';
-        proUserNote.classList.remove('hidden');
+        proStatusDesc.textContent = 'You have unlimited access to AI-generated cards using our premium API, or use your own API keys!';
+        // Show API keys section for PRO users only
+        if (apiKeysSection) {
+            apiKeysSection.style.display = 'block';
+        }
+
+        // Load saved API keys (masked display) - only for pro users
+        const openaiKey = getAPIKey('openai');
+        const claudeKey = getAPIKey('claude');
+        const geminiKey = getAPIKey('gemini');
+
+        document.getElementById('openaiKeyInput').value = openaiKey ? maskAPIKey(openaiKey) : '';
+        document.getElementById('claudeKeyInput').value = claudeKey ? maskAPIKey(claudeKey) : '';
+        document.getElementById('geminiKeyInput').value = geminiKey ? maskAPIKey(geminiKey) : '';
+
+        // When user focuses on masked key input, clear it so they can enter a new one
+        const handleMaskedFocus = (inputId) => {
+            const input = document.getElementById(inputId);
+            if (input.value && input.value.includes('•')) {
+                input.value = '';
+            }
+        };
+
+        document.getElementById('openaiKeyInput').addEventListener('focus', () => handleMaskedFocus('openaiKeyInput'));
+        document.getElementById('claudeKeyInput').addEventListener('focus', () => handleMaskedFocus('claudeKeyInput'));
+        document.getElementById('geminiKeyInput').addEventListener('focus', () => handleMaskedFocus('geminiKeyInput'));
     } else {
         proStatusCard.classList.remove('is-pro');
         proStatusTitle.textContent = 'Free Plan';
-        proStatusDesc.textContent = 'You are currently on the free plan. Contact support to upgrade to Pro for unlimited AI-generated cards!';
-        proUserNote.classList.add('hidden');
-    }
-
-    // Load saved API keys (masked display)
-    const openaiKey = getAPIKey('openai');
-    const claudeKey = getAPIKey('claude');
-    const geminiKey = getAPIKey('gemini');
-
-    document.getElementById('openaiKeyInput').value = openaiKey ? maskAPIKey(openaiKey) : '';
-    document.getElementById('claudeKeyInput').value = claudeKey ? maskAPIKey(claudeKey) : '';
-    document.getElementById('geminiKeyInput').value = geminiKey ? maskAPIKey(geminiKey) : '';
-
-    // When user focuses on masked key input, clear it so they can enter a new one
-    const handleMaskedFocus = (inputId) => {
-        const input = document.getElementById(inputId);
-        if (input.value && input.value.includes('•')) {
-            input.value = '';
+        proStatusDesc.textContent = 'You are currently on the free plan. Upgrade to Pro to use our premium API or add your own API keys!';
+        // Hide API keys section for FREE users
+        if (apiKeysSection) {
+            apiKeysSection.style.display = 'none';
         }
-    };
-
-    document.getElementById('openaiKeyInput').addEventListener('focus', () => handleMaskedFocus('openaiKeyInput'));
-    document.getElementById('claudeKeyInput').addEventListener('focus', () => handleMaskedFocus('claudeKeyInput'));
-    document.getElementById('geminiKeyInput').addEventListener('focus', () => handleMaskedFocus('geminiKeyInput'));
+    }
 }
 
 // Mask API key for display (show only last 4 characters)
@@ -1757,6 +1847,11 @@ function initAccount() {
 
     // API Key Management - OpenAI
     saveOpenAIKey.addEventListener('click', () => {
+        // Block free users from saving API keys
+        if (!isProUser) {
+            showNotification('This feature is only available for Pro users. Upgrade to Pro to use your own API keys!', 'error');
+            return;
+        }
         const key = document.getElementById('openaiKeyInput').value.trim();
         if (!key) {
             showNotification('Please enter an API key', 'error');
@@ -1767,6 +1862,11 @@ function initAccount() {
     });
 
     clearOpenAIKey.addEventListener('click', () => {
+        // Block free users from clearing API keys
+        if (!isProUser) {
+            showNotification('This feature is only available for Pro users.', 'error');
+            return;
+        }
         setAPIKey('openai', '');
         document.getElementById('openaiKeyInput').value = '';
         showNotification('OpenAI API key cleared', 'success');
@@ -1774,6 +1874,11 @@ function initAccount() {
 
     // API Key Management - Claude
     saveClaudeKey.addEventListener('click', () => {
+        // Block free users from saving API keys
+        if (!isProUser) {
+            showNotification('This feature is only available for Pro users. Upgrade to Pro to use your own API keys!', 'error');
+            return;
+        }
         const key = document.getElementById('claudeKeyInput').value.trim();
         if (!key) {
             showNotification('Please enter an API key', 'error');
@@ -1784,6 +1889,11 @@ function initAccount() {
     });
 
     clearClaudeKey.addEventListener('click', () => {
+        // Block free users from clearing API keys
+        if (!isProUser) {
+            showNotification('This feature is only available for Pro users.', 'error');
+            return;
+        }
         setAPIKey('claude', '');
         document.getElementById('claudeKeyInput').value = '';
         showNotification('Claude API key cleared', 'success');
@@ -1791,6 +1901,11 @@ function initAccount() {
 
     // API Key Management - Gemini
     saveGeminiKey.addEventListener('click', () => {
+        // Block free users from saving API keys
+        if (!isProUser) {
+            showNotification('This feature is only available for Pro users. Upgrade to Pro to use your own API keys!', 'error');
+            return;
+        }
         const key = document.getElementById('geminiKeyInput').value.trim();
         if (!key) {
             showNotification('Please enter an API key', 'error');
@@ -1801,6 +1916,11 @@ function initAccount() {
     });
 
     clearGeminiKey.addEventListener('click', () => {
+        // Block free users from clearing API keys
+        if (!isProUser) {
+            showNotification('This feature is only available for Pro users.', 'error');
+            return;
+        }
         setAPIKey('gemini', '');
         document.getElementById('geminiKeyInput').value = '';
         showNotification('Gemini API key cleared', 'success');
