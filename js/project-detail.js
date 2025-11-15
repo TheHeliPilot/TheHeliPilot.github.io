@@ -8,31 +8,514 @@ let noteSortOrder = 'date';  // Default sort: by date (newest first)
 
 // Initialize the project detail page
 export function initProjectDetailPage() {
-    // Initialize Markdown editor
+    // Initialize Markdown editor - using contenteditable with inline formatting
     markdownEditor = document.getElementById('markdownEditor');
+    const wysiwygEditor = document.getElementById('wysiwygEditor');
 
-    if (markdownEditor) {
-        // Auto-save on editor input
-        markdownEditor.addEventListener('input', () => {
+    if (markdownEditor && wysiwygEditor) {
+        let isUpdating = false;
+
+        // Render markdown with inline syntax highlighting
+        // Helper function to extract text with proper newlines
+        function getTextWithNewlines(element) {
+            let text = '';
+            for (let node of element.childNodes) {
+                if (node.nodeType === 3) { // Text node
+                    text += node.textContent;
+                } else if (node.nodeName === 'BR') {
+                    text += '\n';
+                } else if (node.nodeName === 'DIV' || node.nodeName === 'P') {
+                    if (text && !text.endsWith('\n')) {
+                        text += '\n';
+                    }
+                    text += getTextWithNewlines(node);
+                    text += '\n';
+                } else {
+                    text += getTextWithNewlines(node);
+                }
+            }
+            return text;
+        }
+
+        function renderInlineMarkdown() {
+            if (isUpdating) return;
+            isUpdating = true;
+
+            const text = getTextWithNewlines(wysiwygEditor).replace(/\n+$/, ''); // Remove trailing newlines
+
+            // Save cursor position
+            const selection = window.getSelection();
+            let cursorPos = 0;
+            if (selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
+                const preCaretRange = range.cloneRange();
+                preCaretRange.selectNodeContents(wysiwygEditor);
+                preCaretRange.setEnd(range.endContainer, range.endOffset);
+                cursorPos = preCaretRange.toString().length;
+            }
+
+            // Apply inline formatting with visible markdown syntax
+            let html = text
+                // Bold: **text** -> make text bold but keep **
+                .replace(/(\*\*)(.*?)(\*\*)/g, '<span class="md-syntax">$1</span><strong>$2</strong><span class="md-syntax">$3</span>')
+                // Italic: *text* -> make text italic but keep * (but not part of list markers)
+                .replace(/(?<!\*)(\*)(?!\*)(.+?)(?<!\*)(\*)(?!\*)/g, '<span class="md-syntax">$1</span><em>$2</em><span class="md-syntax">$3</span>')
+                // Headers: # text
+                .replace(/^(#{1,6})\s+(.+)$/gm, '<span class="md-syntax">$1 </span><strong class="md-header">$2</strong>')
+                // Code: `text`
+                .replace(/(`)(.*?)(`)/g, '<span class="md-syntax">$1</span><code>$2</code><span class="md-syntax">$3</span>')
+                // Task lists: - [ ] or - [x]
+                .replace(/^(\s*)(- \[[ x]\])\s+(.+)$/gm, (match, indent, checkbox, content) => {
+                    const isChecked = checkbox.includes('x');
+                    const checkboxHtml = `<input type="checkbox" class="task-checkbox" ${isChecked ? 'checked' : ''} style="margin-right: 0.5em;">`;
+                    return `${indent}<span class="md-syntax">${checkbox}</span>${checkboxHtml}${content}`;
+                })
+                // Ordered lists: 1. item
+                .replace(/^(\s*)(\d+\.)\s+(.+)$/gm, '<span class="md-list-item">$1<span class="md-syntax">$2 </span>$3</span>')
+                // Bullet lists: - item or * item
+                .replace(/^(\s*)([-*])\s+(?!\[[ x]\])(.+)$/gm, '<span class="md-list-item">$1<span class="md-syntax">$2 </span>$3</span>')
+                // Line breaks
+                .replace(/\n/g, '<br>');
+
+            wysiwygEditor.innerHTML = html;
+
+            // Store raw markdown
+            markdownEditor.value = text;
+
+            // Restore cursor
+            try {
+                const range = document.createRange();
+                const sel = window.getSelection();
+                let charCount = 0;
+                let nodeStack = [wysiwygEditor];
+                let node, foundStart = false;
+
+                while (!foundStart && (node = nodeStack.pop())) {
+                    if (node.nodeType === 3) { // Text node
+                        const nextCharCount = charCount + node.length;
+                        if (cursorPos <= nextCharCount) {
+                            range.setStart(node, cursorPos - charCount);
+                            range.setEnd(node, cursorPos - charCount);
+                            foundStart = true;
+                        }
+                        charCount = nextCharCount;
+                    } else if (node.nodeName === 'BR') {
+                        // Count <br> as newline character
+                        charCount += 1;
+                        if (cursorPos === charCount && node.nextSibling) {
+                            // Place cursor after the <br>
+                            if (node.nextSibling.nodeType === 3) {
+                                range.setStart(node.nextSibling, 0);
+                                range.setEnd(node.nextSibling, 0);
+                                foundStart = true;
+                            }
+                        } else if (cursorPos === charCount && !node.nextSibling) {
+                            // Cursor at end after <br>
+                            range.setStartAfter(node);
+                            range.setEndAfter(node);
+                            foundStart = true;
+                        }
+                    } else {
+                        for (let i = node.childNodes.length - 1; i >= 0; i--) {
+                            nodeStack.push(node.childNodes[i]);
+                        }
+                    }
+                }
+
+                // Fallback: if cursor position not found, place at end
+                if (!foundStart && wysiwygEditor.lastChild) {
+                    if (wysiwygEditor.lastChild.nodeType === 3) {
+                        range.setStart(wysiwygEditor.lastChild, wysiwygEditor.lastChild.length);
+                        range.setEnd(wysiwygEditor.lastChild, wysiwygEditor.lastChild.length);
+                    } else {
+                        range.setStartAfter(wysiwygEditor.lastChild);
+                        range.setEndAfter(wysiwygEditor.lastChild);
+                    }
+                }
+
+                sel.removeAllRanges();
+                sel.addRange(range);
+            } catch (e) {
+                console.log('Cursor restore failed:', e);
+            }
+
+            isUpdating = false;
+        }
+
+        // Update toolbar button states based on cursor position
+        function updateToolbarStates() {
+            const selection = window.getSelection();
+            if (!selection.rangeCount) return;
+
+            const range = selection.getRangeAt(0);
+            let node = range.commonAncestorContainer;
+
+            // Traverse up to find formatting
+            const formats = {
+                bold: false,
+                italic: false,
+                code: false,
+                header: false
+            };
+
+            while (node && node !== wysiwygEditor) {
+                if (node.nodeName === 'STRONG') formats.bold = true;
+                if (node.nodeName === 'EM') formats.italic = true;
+                if (node.nodeName === 'CODE') formats.code = true;
+                if (node.className && node.className.includes('md-header')) formats.header = true;
+                node = node.parentNode;
+            }
+
+            // Update toolbar buttons
+            document.querySelectorAll('.md-btn').forEach(btn => {
+                const action = btn.getAttribute('data-action');
+                if (action === 'bold' && formats.bold) {
+                    btn.classList.add('active');
+                } else if (action === 'italic' && formats.italic) {
+                    btn.classList.add('active');
+                } else if (action === 'code' && formats.code) {
+                    btn.classList.add('active');
+                } else if (action === 'h1' && formats.header) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+        }
+
+        // Handle input - store content without re-rendering
+        wysiwygEditor.addEventListener('input', (e) => {
+            // Just update the stored markdown value without re-rendering
+            const text = getTextWithNewlines(wysiwygEditor);
+            markdownEditor.value = text;
+
             if (currentNoteFile) {
                 markNoteAsUnsavedFullscreen();
                 scheduleAutoSave();
             }
         });
 
-        // Setup toolbar buttons
-        setupMarkdownToolbar();
+        // Render markdown only on specific triggers
+        let renderDebounceTimer = null;
+        wysiwygEditor.addEventListener('keyup', (e) => {
+            // Clear any pending render
+            clearTimeout(renderDebounceTimer);
 
-        // Keyboard shortcuts
-        markdownEditor.addEventListener('keydown', handleMarkdownShortcuts);
-
-        // Handle tab key for indentation
-        markdownEditor.addEventListener('keydown', (e) => {
-            if (e.key === 'Tab') {
-                e.preventDefault();
-                insertAtCursor('    '); // 4 spaces
+            // Only render on Space, and debounce it
+            if (e.key === ' ') {
+                renderDebounceTimer = setTimeout(() => {
+                    const text = getTextWithNewlines(wysiwygEditor);
+                    // Check if text contains markdown syntax that should be rendered
+                    if (text.includes('**') || text.includes('*') || text.includes('`') ||
+                        text.includes('- [ ]') || text.includes('- [x]') ||
+                        text.match(/^#{1,6}\s/m) || text.match(/^\d+\.\s/m) || text.match(/^[-*]\s/m)) {
+                        renderInlineMarkdown();
+                    }
+                }, 200); // Wait 200ms before rendering
             }
         });
+
+        // Handle task checkbox clicks
+        wysiwygEditor.addEventListener('click', (e) => {
+            if (e.target.classList.contains('task-checkbox')) {
+                e.preventDefault();
+
+                // Get the current markdown text
+                const text = wysiwygEditor.textContent;
+                const lines = text.split('\n');
+
+                // Find which line contains this checkbox
+                const selection = window.getSelection();
+                const range = selection.getRangeAt(0);
+                const preCaretRange = range.cloneRange();
+                preCaretRange.selectNodeContents(wysiwygEditor);
+                preCaretRange.setEnd(range.endContainer, range.endOffset);
+                const cursorPos = preCaretRange.toString().length;
+
+                // Find the line number based on cursor position
+                let charCount = 0;
+                let lineIndex = 0;
+                for (let i = 0; i < lines.length; i++) {
+                    charCount += lines[i].length + 1; // +1 for newline
+                    if (charCount > cursorPos) {
+                        lineIndex = i;
+                        break;
+                    }
+                }
+
+                // Toggle the checkbox in the markdown
+                const line = lines[lineIndex];
+                if (line.includes('- [ ]')) {
+                    lines[lineIndex] = line.replace('- [ ]', '- [x]');
+                } else if (line.includes('- [x]')) {
+                    lines[lineIndex] = line.replace('- [x]', '- [ ]');
+                }
+
+                // Update the editor with the modified text
+                const newText = lines.join('\n');
+                wysiwygEditor.textContent = newText;
+                markdownEditor.value = newText;
+
+                // Re-render and restore cursor
+                renderInlineMarkdown();
+
+                if (currentNoteFile) {
+                    markNoteAsUnsavedFullscreen();
+                    scheduleAutoSave();
+                }
+            }
+        });
+
+        // Update toolbar states on selection change
+        wysiwygEditor.addEventListener('click', updateToolbarStates);
+        wysiwygEditor.addEventListener('keyup', updateToolbarStates);
+        wysiwygEditor.addEventListener('mouseup', updateToolbarStates);
+
+        // Handle keyboard shortcuts
+        wysiwygEditor.addEventListener('keydown', (e) => {
+            // Enter key - smart list continuation
+            if (e.key === 'Enter' && !e.shiftKey) {
+                const selection = window.getSelection();
+                if (selection.rangeCount > 0) {
+                    const range = selection.getRangeAt(0);
+
+                    // Get current line content
+                    const text = getTextWithNewlines(wysiwygEditor);
+                    const lines = text.split('\n');
+
+                    // Find current line
+                    const preCaretRange = range.cloneRange();
+                    preCaretRange.selectNodeContents(wysiwygEditor);
+                    preCaretRange.setEnd(range.endContainer, range.endOffset);
+                    const cursorPos = preCaretRange.toString().length;
+
+                    let currentLineIndex = 0;
+                    let charCount = 0;
+                    for (let i = 0; i < lines.length; i++) {
+                        charCount += lines[i].length + 1;
+                        if (charCount > cursorPos) {
+                            currentLineIndex = i;
+                            break;
+                        }
+                    }
+
+                    const currentLine = lines[currentLineIndex];
+
+                    // Only check for list continuation if line actually starts with list marker
+                    // This prevents multi-line content (from Shift+Enter) from being treated as list
+                    const bulletMatch = currentLine.match(/^(\s*)([-*])\s+(.*)$/);
+                    const orderedMatch = currentLine.match(/^(\s*)(\d+)\.\s+(.*)$/);
+                    const taskMatch = currentLine.match(/^(\s*)(- \[[ xX]\])\s+(.*)$/);
+
+                    // If the current line is an empty list item, break out of the list
+                    if (bulletMatch && bulletMatch[3].trim() === '') {
+                        // Empty bullet item - exit list mode
+                        e.preventDefault();
+                        // Remove the list marker and just create newline
+                        const selection = window.getSelection();
+                        const range = selection.getRangeAt(0);
+
+                        // Delete the current line's list marker
+                        const lineStart = charCount - currentLine.length - 1;
+                        const markerLength = bulletMatch[0].length - bulletMatch[3].length;
+
+                        document.execCommand('insertText', false, '\n');
+                        return;
+                    } else if (orderedMatch && orderedMatch[3].trim() === '') {
+                        // Empty ordered item - exit list mode
+                        e.preventDefault();
+                        document.execCommand('insertText', false, '\n');
+                        return;
+                    } else if (taskMatch && taskMatch[3].trim() === '') {
+                        // Empty task item - exit list mode
+                        e.preventDefault();
+                        document.execCommand('insertText', false, '\n');
+                        return;
+                    }
+
+                    if (taskMatch) {
+                        // Task list - create new unchecked task
+                        e.preventDefault();
+                        const indent = taskMatch[1];
+                        document.execCommand('insertText', false, '\n' + indent + '- [ ] ');
+                        return;
+                    } else if (orderedMatch) {
+                        // Ordered list - increment number
+                        e.preventDefault();
+                        const indent = orderedMatch[1];
+                        const nextNum = parseInt(orderedMatch[2]) + 1;
+                        document.execCommand('insertText', false, '\n' + indent + nextNum + '. ');
+                        return;
+                    } else if (bulletMatch) {
+                        // Bullet list - same bullet
+                        e.preventDefault();
+                        const indent = bulletMatch[1];
+                        const bullet = bulletMatch[2];
+                        document.execCommand('insertText', false, '\n' + indent + bullet + ' ');
+                        return;
+                    }
+                }
+                // Not in a list, allow default Enter behavior
+            }
+
+            // Shift+Enter - always just newline (no list continuation)
+            if (e.key === 'Enter' && e.shiftKey) {
+                e.preventDefault();
+                document.execCommand('insertText', false, '\n');
+                return;
+            }
+
+            // Tab for indentation
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                document.execCommand('insertText', false, '    ');
+                return;
+            }
+
+            // Bold with Ctrl+B
+            if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+                e.preventDefault();
+                insertMarkdownSyntax('**', '**');
+                return;
+            }
+
+            // Italic with Ctrl+I
+            if ((e.ctrlKey || e.metaKey) && e.key === 'i') {
+                e.preventDefault();
+                insertMarkdownSyntax('*', '*');
+                return;
+            }
+        });
+
+        // Insert markdown syntax
+        function insertMarkdownSyntax(before, after) {
+            const selection = window.getSelection();
+            if (selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
+                const selectedText = range.toString();
+
+                if (selectedText) {
+                    // Text is selected - wrap it and move cursor after selected text
+                    const textNode = document.createTextNode(before + selectedText + after);
+                    range.deleteContents();
+                    range.insertNode(textNode);
+
+                    // Move cursor after inserted text
+                    range.setStartAfter(textNode);
+                    range.setEndAfter(textNode);
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+
+                    renderInlineMarkdown();
+                } else {
+                    // No text selected - insert syntax and place cursor in middle
+                    const textNode = document.createTextNode(before + after);
+                    range.deleteContents();
+                    range.insertNode(textNode);
+
+                    // Save the cursor position BEFORE rendering (middle of syntax)
+                    const savedCursorPos = before.length;
+
+                    // Calculate absolute cursor position for restoration
+                    const preCaretRange = document.createRange();
+                    preCaretRange.selectNodeContents(wysiwygEditor);
+                    preCaretRange.setEnd(textNode, savedCursorPos);
+                    const absoluteCursorPos = preCaretRange.toString().length;
+
+                    renderInlineMarkdown();
+
+                    // Restore cursor to middle position after rendering
+                    try {
+                        const sel = window.getSelection();
+                        const newRange = document.createRange();
+                        let charCount = 0;
+                        let nodeStack = [wysiwygEditor];
+                        let node, foundStart = false;
+
+                        while (!foundStart && (node = nodeStack.pop())) {
+                            if (node.nodeType === 3) { // Text node
+                                const nextCharCount = charCount + node.length;
+                                if (absoluteCursorPos <= nextCharCount) {
+                                    newRange.setStart(node, absoluteCursorPos - charCount);
+                                    newRange.setEnd(node, absoluteCursorPos - charCount);
+                                    foundStart = true;
+                                }
+                                charCount = nextCharCount;
+                            } else {
+                                for (let i = node.childNodes.length - 1; i >= 0; i--) {
+                                    nodeStack.push(node.childNodes[i]);
+                                }
+                            }
+                        }
+
+                        sel.removeAllRanges();
+                        sel.addRange(newRange);
+                        wysiwygEditor.focus();
+                    } catch (e) {
+                        console.log('Cursor positioning failed:', e);
+                    }
+                }
+            }
+        }
+
+        // Setup toolbar buttons to use insertMarkdownSyntax
+        const toolbar = document.getElementById('markdownToolbar');
+        if (toolbar) {
+            const buttons = toolbar.querySelectorAll('.md-btn[data-action]');
+            buttons.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    wysiwygEditor.focus();
+
+                    const action = btn.dataset.action;
+
+                    // Map actions to markdown syntax
+                    switch (action) {
+                        case 'bold':
+                            insertMarkdownSyntax('**', '**');
+                            break;
+                        case 'italic':
+                            insertMarkdownSyntax('*', '*');
+                            break;
+                        case 'strikethrough':
+                            insertMarkdownSyntax('~~', '~~');
+                            break;
+                        case 'code':
+                            insertMarkdownSyntax('`', '`');
+                            break;
+                        case 'h1':
+                            insertMarkdownSyntax('# ', '');
+                            break;
+                        case 'h2':
+                            insertMarkdownSyntax('## ', '');
+                            break;
+                        case 'h3':
+                            insertMarkdownSyntax('### ', '');
+                            break;
+                        case 'quote':
+                            insertMarkdownSyntax('> ', '');
+                            break;
+                        case 'ul':
+                            insertMarkdownSyntax('- ', '');
+                            break;
+                        case 'ol':
+                            insertMarkdownSyntax('1. ', '');
+                            break;
+                        case 'task':
+                            insertMarkdownSyntax('- [ ] ', '');
+                            break;
+                        case 'codeblock':
+                            insertMarkdownSyntax('```\n', '\n```');
+                            break;
+                    }
+
+                    updateToolbarStates();
+                });
+            });
+        }
+
+        // Initial render
+        renderInlineMarkdown();
     }
 
     setupProjectDetailEventListeners();
@@ -1399,6 +1882,16 @@ function openNoteFileFullscreen(fileId) {
         markdownEditor.value = file.content || '';
     }
 
+    // Load content into WYSIWYG editor
+    const wysiwygEditor = document.getElementById('wysiwygEditor');
+    if (wysiwygEditor) {
+        wysiwygEditor.textContent = file.content || '';
+        // Trigger rendering to show markdown formatting
+        const inputEvent = new Event('keyup', { bubbles: true });
+        Object.defineProperty(inputEvent, 'key', { value: ' ' });
+        wysiwygEditor.dispatchEvent(inputEvent);
+    }
+
     // Update sidebar project name
     const sidebarProjectName = document.getElementById('sidebarProjectName');
     if (sidebarProjectName && currentProject) {
@@ -1541,6 +2034,16 @@ async function switchNoteFileInFullscreen(fileId) {
     // Load content into Markdown editor
     if (markdownEditor) {
         markdownEditor.value = file.content || '';
+    }
+
+    // Load content into WYSIWYG editor
+    const wysiwygEditor = document.getElementById('wysiwygEditor');
+    if (wysiwygEditor) {
+        wysiwygEditor.textContent = file.content || '';
+        // Trigger rendering to show markdown formatting
+        const inputEvent = new Event('keyup', { bubbles: true });
+        Object.defineProperty(inputEvent, 'key', { value: ' ' });
+        wysiwygEditor.dispatchEvent(inputEvent);
     }
 
     // Update UI
@@ -4524,7 +5027,7 @@ function setupMarkdownToolbar() {
     });
 }
 
-// Apply Markdown formatting
+// Apply Markdown formatting with TOGGLE functionality
 function applyMarkdownFormat(action) {
     if (!markdownEditor) return;
 
@@ -4537,19 +5040,133 @@ function applyMarkdownFormat(action) {
     let newText = '';
     let cursorOffset = 0;
 
+    // Helper function to check if text is already wrapped with syntax
+    function isWrappedWith(text, before, after) {
+        const beforeLen = before.length;
+        const afterLen = after.length;
+        return text.startsWith(before) && text.endsWith(after) && text.length > beforeLen + afterLen;
+    }
+
+    // Helper function to unwrap text
+    function unwrap(text, before, after) {
+        return text.substring(before.length, text.length - after.length);
+    }
+
+    // Helper function to expand selection to include surrounding syntax
+    function expandSelection(syntax) {
+        const syntaxLen = syntax.length;
+        const expandedStart = Math.max(0, start - syntaxLen);
+        const expandedEnd = Math.min(markdownEditor.value.length, end + syntaxLen);
+        const expandedText = markdownEditor.value.substring(expandedStart, expandedEnd);
+
+        if (isWrappedWith(expandedText, syntax, syntax)) {
+            return {
+                text: expandedText,
+                start: expandedStart,
+                end: expandedEnd,
+                wrapped: true
+            };
+        }
+        return { text: selectedText, start, end, wrapped: false };
+    }
+
     switch (action) {
-        case 'bold':
-            newText = `**${selectedText || 'bold text'}**`;
-            cursorOffset = selectedText ? newText.length : 2;
-            break;
-        case 'italic':
-            newText = `*${selectedText || 'italic text'}*`;
-            cursorOffset = selectedText ? newText.length : 1;
-            break;
-        case 'strikethrough':
-            newText = `~~${selectedText || 'strikethrough text'}~~`;
-            cursorOffset = selectedText ? newText.length : 2;
-            break;
+        case 'bold': {
+            const expanded = expandSelection('**');
+            if (expanded.wrapped) {
+                // Remove bold
+                newText = unwrap(expanded.text, '**', '**');
+                markdownEditor.value = markdownEditor.value.substring(0, expanded.start) + newText + markdownEditor.value.substring(expanded.end);
+                markdownEditor.setSelectionRange(expanded.start, expanded.start + newText.length);
+            } else {
+                // Add bold
+                if (selectedText) {
+                    // Text is selected - wrap it and move cursor to end
+                    newText = `**${selectedText}**`;
+                    markdownEditor.value = beforeText + newText + afterText;
+                    cursorOffset = newText.length - 2;
+                    markdownEditor.setSelectionRange(start + cursorOffset, start + cursorOffset);
+                } else {
+                    // No text selected - insert syntax and place cursor in middle
+                    newText = `****`;
+                    markdownEditor.value = beforeText + newText + afterText;
+                    markdownEditor.setSelectionRange(start + 2, start + 2);
+                }
+            }
+            return;
+        }
+        case 'italic': {
+            const expanded = expandSelection('*');
+            if (expanded.wrapped) {
+                // Remove italic
+                newText = unwrap(expanded.text, '*', '*');
+                markdownEditor.value = markdownEditor.value.substring(0, expanded.start) + newText + markdownEditor.value.substring(expanded.end);
+                markdownEditor.setSelectionRange(expanded.start, expanded.start + newText.length);
+            } else {
+                // Add italic
+                if (selectedText) {
+                    // Text is selected - wrap it and move cursor to end
+                    newText = `*${selectedText}*`;
+                    markdownEditor.value = beforeText + newText + afterText;
+                    cursorOffset = newText.length - 1;
+                    markdownEditor.setSelectionRange(start + cursorOffset, start + cursorOffset);
+                } else {
+                    // No text selected - insert syntax and place cursor in middle
+                    newText = `**`;
+                    markdownEditor.value = beforeText + newText + afterText;
+                    markdownEditor.setSelectionRange(start + 1, start + 1);
+                }
+            }
+            return;
+        }
+        case 'strikethrough': {
+            const expanded = expandSelection('~~');
+            if (expanded.wrapped) {
+                // Remove strikethrough
+                newText = unwrap(expanded.text, '~~', '~~');
+                markdownEditor.value = markdownEditor.value.substring(0, expanded.start) + newText + markdownEditor.value.substring(expanded.end);
+                markdownEditor.setSelectionRange(expanded.start, expanded.start + newText.length);
+            } else {
+                // Add strikethrough
+                if (selectedText) {
+                    // Text is selected - wrap it and move cursor to end
+                    newText = `~~${selectedText}~~`;
+                    markdownEditor.value = beforeText + newText + afterText;
+                    cursorOffset = newText.length - 2;
+                    markdownEditor.setSelectionRange(start + cursorOffset, start + cursorOffset);
+                } else {
+                    // No text selected - insert syntax and place cursor in middle
+                    newText = `~~~~`;
+                    markdownEditor.value = beforeText + newText + afterText;
+                    markdownEditor.setSelectionRange(start + 2, start + 2);
+                }
+            }
+            return;
+        }
+        case 'code': {
+            const expanded = expandSelection('`');
+            if (expanded.wrapped) {
+                // Remove code
+                newText = unwrap(expanded.text, '`', '`');
+                markdownEditor.value = markdownEditor.value.substring(0, expanded.start) + newText + markdownEditor.value.substring(expanded.end);
+                markdownEditor.setSelectionRange(expanded.start, expanded.start + newText.length);
+            } else {
+                // Add code
+                if (selectedText) {
+                    // Text is selected - wrap it and move cursor to end
+                    newText = `\`${selectedText}\``;
+                    markdownEditor.value = beforeText + newText + afterText;
+                    cursorOffset = newText.length - 1;
+                    markdownEditor.setSelectionRange(start + cursorOffset, start + cursorOffset);
+                } else {
+                    // No text selected - insert syntax and place cursor in middle
+                    newText = `\`\``;
+                    markdownEditor.value = beforeText + newText + afterText;
+                    markdownEditor.setSelectionRange(start + 1, start + 1);
+                }
+            }
+            return;
+        }
         case 'h1':
             newText = `# ${selectedText || 'Heading 1'}`;
             cursorOffset = newText.length;
@@ -4565,10 +5182,6 @@ function applyMarkdownFormat(action) {
         case 'quote':
             newText = `> ${selectedText || 'Quote'}`;
             cursorOffset = newText.length;
-            break;
-        case 'code':
-            newText = `\`${selectedText || 'code'}\``;
-            cursorOffset = selectedText ? newText.length : 1;
             break;
         case 'codeblock':
             newText = `\`\`\`\n${selectedText || '// Code here'}\n\`\`\``;

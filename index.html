@@ -778,13 +778,22 @@
                                         <button class="md-btn" data-action="hr" title="Horizontal Rule"><i class="fas fa-minus"></i></button>
                                     </div>
 
-                                    <!-- Markdown Editor -->
+                                    <!-- Markdown Editor with Live Rendering -->
                                     <div>
-                                        <textarea id="markdownEditor" placeholder="Start writing in Markdown..."
-                                            style="width: 100%; min-height: 500px; background: var(--surface); border: none;
-                                                   padding: 2rem; font-family: 'JetBrains Mono', 'Consolas', 'Monaco', 'Courier New', monospace;
-                                                   font-size: 0.95rem; line-height: 1.7; color: var(--text); resize: vertical;
-                                                   outline: none; box-sizing: border-box;"></textarea>
+                                        <!-- Hidden textarea for storing raw markdown -->
+                                        <textarea id="markdownEditor" style="display: none;"></textarea>
+
+                                        <!-- WYSIWYG Editor -->
+                                        <div id="wysiwygEditor"
+                                             contenteditable="true"
+                                             spellcheck="false"
+                                             placeholder="Start writing in Markdown..."
+                                             class="markdown-preview"
+                                             style="min-height: 500px; padding: 2rem;
+                                                    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                                                    font-size: 1rem; line-height: 1.7; color: var(--text);
+                                                    outline: none; cursor: text; white-space: pre-wrap; word-wrap: break-word;
+                                                    overflow-y: auto;"></div>
                                     </div>
                                 </div>
                             </div>
